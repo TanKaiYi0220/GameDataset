@@ -91,6 +91,72 @@ def calc_flow(args, model, image1, image2):
     info_down = F.interpolate(info, scale_factor=0.5 ** args.scale, mode='area')
     return flow_down, info_down
 
+def forward_warp_nearest(src, flow):
+    """
+    src:  [N,C,H,W]
+    flow: [N,2,H,W]  (dx, dy), 定義為從 source 座標 (x,y) -> target (x+dx, y+dy)
+    回傳:
+      out:  [N,C,H,W]
+      hit:  [N,1,H,W]  累積權重(命中次數)，可用來看洞的位置
+    """
+    N, C, H, W = src.shape
+    device = src.device
+
+    # 建 (y,x) 網格
+    yy, xx = torch.meshgrid(
+        torch.arange(H, device=device), torch.arange(W, device=device),
+        indexing='ij'
+    )  # [H,W]
+    xx = xx.unsqueeze(0).expand(N, -1, -1).float()
+    yy = yy.unsqueeze(0).expand(N, -1, -1).float()
+
+    tx = xx + flow[:,0]  # [N,H,W]
+    ty = yy + flow[:,1]  # [N,H,W]
+
+    # 最近鄰
+    txn = tx.round().long()
+    tyn = ty.round().long()
+
+    # 有效範圍
+    mask = (txn >= 0) & (txn < W) & (tyn >= 0) & (tyn < H)
+
+    out = torch.zeros_like(src)
+    hit = torch.zeros((N,1,H,W), device=device, dtype=src.dtype)
+
+    # 展平 index，做 scatter_add
+    linear_idx = tyn.clamp(0, H-1) * W + txn.clamp(0, W-1)  # [N,H,W]
+    base = (torch.arange(N, device=device) * (H*W)).view(N,1,1)
+    flat_idx = (linear_idx + base).view(-1)  # [N*H*W]
+
+    src_flat = src.permute(0,2,3,1).reshape(-1, C)  # [N*H*W, C]
+    mask_flat = mask.view(-1)
+
+    out_flat = torch.zeros((N*H*W, C), device=device, dtype=src.dtype)
+    out_flat.index_add_(0, flat_idx[mask_flat], src_flat[mask_flat])
+    out = out_flat.view(N, H, W, C).permute(0,3,1,2)
+
+    hit_flat = torch.zeros((N*H*W, 1), device=device, dtype=src.dtype)
+    one = torch.ones((mask_flat.sum(),1), device=device, dtype=src.dtype)
+    hit_flat.index_add_(0, flat_idx[mask_flat], one)
+    hit = hit_flat.view(N, H, W, 1).permute(0,3,1,2)
+    return out, hit
+
+def visualize_hit(hit):
+    """
+    hit: [N,1,H,W] torch.Tensor, int (0,1,2,...)
+    return: [H,W,3] uint8 (BGR)
+    """
+    hmap = hit[0,0].cpu().numpy().astype(np.int32)
+    H, W = hmap.shape
+
+    vis = np.zeros((H,W,3), dtype=np.uint8)
+
+    vis[hmap == 0] = (255, 0, 0)   # none-to-one → 藍 (BGR)
+    vis[hmap == 1] = (0, 255, 0)   # one-to-one  → 綠
+    vis[hmap >= 2] = (0, 0, 255)   # many-to-one → 紅
+
+    return vis
+
 @torch.no_grad()
 def demo_data(name, args, model, image1, image2, flow_gt):
     path = f"demo/{name}/"
@@ -111,7 +177,18 @@ def demo_data(name, args, model, image1, image2, flow_gt):
     epe = torch.sum((flow - flow_gt)**2, dim=1).sqrt()
     print(f"EPE: {epe.mean().cpu().item()}")
 
-def FRPG_loader(model, img_0_path, img_1_path, args):
+    # forward warp 檢查 flow direction 是否正確
+    warped_img, hit = forward_warp_nearest(image1, flow)
+    warped_avg = warped_img / (hit + 1e-6)
+    warped_avg = torch.where(hit > 0, warped_avg, torch.zeros_like(warped_avg))  # 沒命中就置零/保持無值
+    cv2.imwrite(f"{path}warped_img.jpg", warped_avg.cpu().numpy()[0].transpose(1, 2, 0).astype(np.uint8))
+    hit_vis = visualize_hit(hit)
+    cv2.imwrite(f"{path}hit_img.jpg", hit_vis)
+    diff_img = np.abs(warped_avg.cpu().numpy() - image2.cpu().numpy())
+    cv2.imwrite(f"{path}diff_img.jpg", diff_img[0].transpose(1, 2, 0))
+    print(f"Diff mean: {diff_img.mean()}, max: {diff_img.max()}")
+
+def FRPG_loader(name, model, img_0_path, img_1_path, img_gt_path, args):
     image1 = cv2.imread(img_0_path)
     image2 = cv2.imread(img_1_path)
 
@@ -119,9 +196,13 @@ def FRPG_loader(model, img_0_path, img_1_path, args):
     image2 = torch.from_numpy(image2).permute(2, 0, 1).unsqueeze(0).float().cuda()
 
     # initialize a empty flow_gt as we do not have ground truth
-    flow_gt = torch.zeros(1, 2, image1.shape[2], image1.shape[3]).float().cuda()
+    if img_gt_path is None:
+        flow_gt = torch.zeros(1, 2, image1.shape[2], image1.shape[3]).float().cuda()
+    else:
+        flow_gt = cv2.imread(img_gt_path)
+        flow_gt = torch.from_numpy(flow_gt).permute(2, 0, 1).unsqueeze(0).float().cuda()
 
-    demo_data("SEARAFT/FRPG/", args, model, image1, image2, flow_gt)
+    demo_data(name, args, model, image1, image2, flow_gt)
 
 def main():
     parser = argparse.ArgumentParser()
@@ -135,9 +216,15 @@ def main():
     model.eval()
 
     # demo on custom images
+    # img_0_path = "/home/kevin/Desktop/VFI/offline_dataset/models/SEARAFT/custom/image1.jpg"
+    # img_1_path = "/home/kevin/Desktop/VFI/offline_dataset/models/SEARAFT/custom/image2.jpg"
+    # img_gt_path = None
+
+    # template for loading FRPG images
     img_0_path = "/home/kevin/Desktop/VFI/offline_dataset/datasets/Fantasy_RPG/FRPG_0_0_0/fps_60_png/colorNoScreenUI_0.png"
-    img_1_path = "/home/kevin/Desktop/VFI/offline_dataset/datasets/Fantasy_RPG/FRPG_0_0_0/fps_60_png/colorNoScreenUI_1.png"
-    FRPG_loader(model, img_0_path, img_1_path, args)
+    img_1_path = "/home/kevin/Desktop/VFI/offline_dataset/datasets/Fantasy_RPG/FRPG_0_0_0/fps_60_png/colorNoScreenUI_3.png"
+    img_gt_path = None
+    FRPG_loader("SEARAFT/FRPG/", model, img_0_path, img_1_path, img_gt_path, args)
 
 
 if __name__ == '__main__':

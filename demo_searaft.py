@@ -1,6 +1,7 @@
 import os
 os.environ["OPENCV_IO_ENABLE_OPENEXR"] = "1"
 from src.EXR_loader import loadEXR
+from src.warp_module import Warping
 
 import sys
 sys.path.append('models/SEARAFT/core')
@@ -95,55 +96,17 @@ def calc_flow(args, model, image1, image2):
     info_down = F.interpolate(info, scale_factor=0.5 ** args.scale, mode='area')
     return flow_down, info_down
 
-def forward_warp_nearest(src, flow):
-    """
-    src:  [N,C,H,W]
-    flow: [N,2,H,W]  (dx, dy), 定義為從 source 座標 (x,y) -> target (x+dx, y+dy)
-    回傳:
-      out:  [N,C,H,W]
-      hit:  [N,1,H,W]  累積權重(命中次數)，可用來看洞的位置
-    """
-    N, C, H, W = src.shape
-    device = src.device
+def demo_warping(warping_module, src_image, target_image, flow, path, name):
+    # demo warping function
+    warping_module.warp(src_image, flow)
+    warped_img, _ = warping_module.get_warping_result(mode="average")
+    hit_vis = warping_module.visualize_hit()
+    diff_img = np.abs(warped_img.cpu().numpy() - target_image.cpu().numpy())
 
-    # 建 (y,x) 網格
-    yy, xx = torch.meshgrid(
-        torch.arange(H, device=device), torch.arange(W, device=device),
-        indexing='ij'
-    )  # [H,W]
-    xx = xx.unsqueeze(0).expand(N, -1, -1).float()
-    yy = yy.unsqueeze(0).expand(N, -1, -1).float()
-
-    tx = xx + flow[:,0]  # [N,H,W]
-    ty = yy + flow[:,1]  # [N,H,W]
-
-    # 最近鄰
-    txn = tx.round().long()
-    tyn = ty.round().long()
-
-    # 有效範圍
-    mask = (txn >= 0) & (txn < W) & (tyn >= 0) & (tyn < H)
-
-    out = torch.zeros_like(src)
-    hit = torch.zeros((N,1,H,W), device=device, dtype=src.dtype)
-
-    # 展平 index，做 scatter_add
-    linear_idx = tyn.clamp(0, H-1) * W + txn.clamp(0, W-1)  # [N,H,W]
-    base = (torch.arange(N, device=device) * (H*W)).view(N,1,1)
-    flat_idx = (linear_idx + base).view(-1)  # [N*H*W]
-
-    src_flat = src.permute(0,2,3,1).reshape(-1, C)  # [N*H*W, C]
-    mask_flat = mask.view(-1)
-
-    out_flat = torch.zeros((N*H*W, C), device=device, dtype=src.dtype)
-    out_flat.index_add_(0, flat_idx[mask_flat], src_flat[mask_flat])
-    out = out_flat.view(N, H, W, C).permute(0,3,1,2)
-
-    hit_flat = torch.zeros((N*H*W, 1), device=device, dtype=src.dtype)
-    one = torch.ones((mask_flat.sum(),1), device=device, dtype=src.dtype)
-    hit_flat.index_add_(0, flat_idx[mask_flat], one)
-    hit = hit_flat.view(N, H, W, 1).permute(0,3,1,2)
-    return out, hit
+    cv2.imwrite(f"{path}warped_img_{name}.jpg", warped_img.cpu().numpy()[0].transpose(1, 2, 0).astype(np.uint8))
+    cv2.imwrite(f"{path}hit_img_{name}.jpg", hit_vis)
+    cv2.imwrite(f"{path}diff_img_{name}.jpg", diff_img[0].transpose(1, 2, 0))
+    print(f"Diff mean: {diff_img.mean()}, max: {diff_img.max()}")
 
 def visualize_hit(hit):
     """
@@ -162,7 +125,7 @@ def visualize_hit(hit):
     return vis
 
 @torch.no_grad()
-def demo_data(name, args, model, image1, image2, flow_gt, bmv_0_path=None):
+def demo_data(name, args, model, warping_module, image1, image2, flow_gt, bmv_0_path=None):
     path = f"demo/{name}/"
     os.system(f"mkdir -p {path}")
     H, W = image1.shape[2:]
@@ -181,30 +144,14 @@ def demo_data(name, args, model, image1, image2, flow_gt, bmv_0_path=None):
     epe = torch.sum((flow - flow_gt)**2, dim=1).sqrt()
     print(f"EPE: {epe.mean().cpu().item()}")
 
-    # forward warp 檢查 flow direction 是否正確
-    warped_img, hit = forward_warp_nearest(image1, flow)
-    warped_avg = warped_img / (hit + 1e-6)
-    warped_avg = torch.where(hit > 0, warped_avg, torch.zeros_like(warped_avg))  # 沒命中就置零/保持無值
-    cv2.imwrite(f"{path}warped_img.jpg", warped_avg.cpu().numpy()[0].transpose(1, 2, 0).astype(np.uint8))
-    hit_vis = visualize_hit(hit)
-    cv2.imwrite(f"{path}hit_img.jpg", hit_vis)
-    diff_img = np.abs(warped_avg.cpu().numpy() - image2.cpu().numpy())
-    cv2.imwrite(f"{path}diff_img.jpg", diff_img[0].transpose(1, 2, 0))
-    print(f"Diff mean: {diff_img.mean()}, max: {diff_img.max()}")
+    # forward warp for flow direction check
+    demo_warping(warping_module, image1, image2, flow, path, name="forward")
 
-    # backward warp 檢查 flow direction 是否正確
+    # backward warping for flow direction check
     bmv, depth = load_backward_velocity(bmv_0_path)
-    warped_img_b, hit_b = backward_warp_nearest(image1, bmv)
-    warped_avg_b = warped_img_b / (hit_b + 1e-6)
-    warped_avg_b = torch.where(hit_b > 0, warped_avg_b, torch.zeros_like(warped_avg_b))  # 沒命中就置零/保持無值
-    cv2.imwrite(f"{path}warped_img_b.jpg", warped_avg_b.cpu().numpy()[0].transpose(1, 2, 0).astype(np.uint8))
-    hit_vis_b = visualize_hit(hit_b)
-    cv2.imwrite(f"{path}hit_img_b.jpg", hit_vis_b)
-    diff_img_b = np.abs(warped_avg_b.cpu().numpy() - image2.cpu().numpy())
-    cv2.imwrite(f"{path}diff_img_b.jpg", diff_img_b[0].transpose(1, 2, 0))
-    print(f"Diff mean: {diff_img_b.mean()}, max: {diff_img_b.max()}")
+    demo_warping(warping_module, image1, image2, bmv, path, name="backward")
 
-def FRPG_loader(name, model, img_0_path, img_1_path, img_gt_path, args, bmv_0_path=None):
+def FRPG_loader(name, model, warping_module, img_0_path, img_1_path, img_gt_path, args, bmv_0_path=None):
     image1 = cv2.imread(img_0_path)
     image2 = cv2.imread(img_1_path)
 
@@ -218,7 +165,7 @@ def FRPG_loader(name, model, img_0_path, img_1_path, img_gt_path, args, bmv_0_pa
         flow_gt = cv2.imread(img_gt_path)
         flow_gt = torch.from_numpy(flow_gt).permute(2, 0, 1).unsqueeze(0).float().cuda()
 
-    demo_data(name, args, model, image1, image2, flow_gt, bmv_0_path)
+    demo_data(name, args, model, warping_module, image1, image2, flow_gt, bmv_0_path)
 
 def load_backward_velocity(exr_path):
     exr_data = loadEXR(exr_path)  # HWC, float32
@@ -235,50 +182,6 @@ def load_backward_velocity(exr_path):
     depth_0 = torch.from_numpy(depth_0).unsqueeze(0).unsqueeze(0).float().cuda()  # NCHW, float32
     return backward_velocity, depth_0
 
-def backward_warp_nearest(src, flow):
-    # src:  [N,C,H,W]
-    # flow: [N,2,H,W]  (dx, dy), 定義為從 source 座標 (x,y) -> target (x+dx, y+dy)
-    # 回傳:
-    #   out:  [N,C,H,W]
-    #   hit:  [N,1,H,W]  累積權重(命中次數)，可用來看洞的位置
-    N, C, H, W = src.shape
-    device = src.device
-
-    # 建 (y,x) 網格
-    yy, xx = torch.meshgrid(
-        torch.arange(H, device=device), torch.arange(W, device=device),
-        indexing='ij'
-    )  # [H,W]
-    xx = xx.unsqueeze(0).expand(N, -1, -1).float()
-    yy = yy.unsqueeze(0).expand(N, -1, -1).float()
-
-    tx = xx + flow[:,0]  # [N,H,W]
-    ty = yy + flow[:,1]  # [N,H,W]
-
-    # 最近鄰
-    txn = tx.round().long()
-    tyn = ty.round().long()
-
-    # 有效範圍
-    mask = (txn >= 0) & (txn < W) & (tyn >= 0) & (tyn < H)
-
-    out = torch.zeros_like(src)
-    hit = torch.zeros((N,1,H,W), device=device, dtype=src.dtype)
-    # 展平 index，做 scatter_add
-    linear_idx = tyn.clamp(0, H-1) * W + txn.clamp(0, W-1)  # [N,H,W]
-    base = (torch.arange(N, device=device) * (H*W)).view(N,1,1)
-    flat_idx = (linear_idx + base).view(-1)  # [N*H*W]
-    src_flat = src.permute(0,2,3,1).reshape(-1, C)  # [N*H*W, C]
-    mask_flat = mask.view(-1)
-    out_flat = torch.zeros((N*H*W, C), device=device, dtype=src.dtype)
-    out_flat.index_add_(0, flat_idx[mask_flat], src_flat[mask_flat])
-    out = out_flat.view(N, H, W, C).permute(0,3,1,2)
-    hit_flat = torch.zeros((N*H*W, 1), device=device, dtype=src.dtype)
-    one = torch.ones((mask_flat.sum(),1), device=device, dtype=src.dtype)
-    hit_flat.index_add_(0, flat_idx[mask_flat], one)
-    hit = hit_flat.view(N, H, W, 1).permute(0,3,1,2)
-    return out, hit 
-
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--cfg', help='experiment configure file name', required=True, type=str)
@@ -290,6 +193,8 @@ def main():
     model = model.cuda()
     model.eval()
 
+    warping_module = Warping(warp_mode="nearest")
+
     # demo on custom images
     # img_0_path = "/home/kevin/Desktop/VFI/offline_dataset/models/SEARAFT/custom/image1.jpg"
     # img_1_path = "/home/kevin/Desktop/VFI/offline_dataset/models/SEARAFT/custom/image2.jpg"
@@ -300,7 +205,7 @@ def main():
     img_1_path = "/home/kevin/Desktop/VFI/offline_dataset/datasets/Fantasy_RPG/FRPG_1_0_0/fps_30_png/colorNoScreenUI_11.png"
     bmv_0_path = "/home/kevin/Desktop/VFI/offline_dataset/datasets/Fantasy_RPG/FRPG_1_0_0/fps_30/backwardVel_Depth_11.exr"
     img_gt_path = None
-    FRPG_loader("SEARAFT/FRPG/", model, img_0_path, img_1_path, img_gt_path, args, bmv_0_path)
+    FRPG_loader("SEARAFT/FRPG/", model, warping_module, img_0_path, img_1_path, img_gt_path, args, bmv_0_path)
 
 
 if __name__ == '__main__':

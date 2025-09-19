@@ -1,6 +1,6 @@
 import os
 os.environ["OPENCV_IO_ENABLE_OPENEXR"] = "1"
-from src.EXR_loader import loadEXR
+from src.gameData_loader import load_backward_velocity
 from src.warp_module import Warping
 
 import sys
@@ -96,34 +96,6 @@ def calc_flow(args, model, image1, image2):
     info_down = F.interpolate(info, scale_factor=0.5 ** args.scale, mode='area')
     return flow_down, info_down
 
-def demo_warping(warping_module, src_image, target_image, flow, path, name):
-    # demo warping function
-    warping_module.warp(src_image, flow)
-    warped_img, _ = warping_module.get_warping_result(mode="average")
-    hit_vis = warping_module.visualize_hit()
-    diff_img = np.abs(warped_img.cpu().numpy() - target_image.cpu().numpy())
-
-    cv2.imwrite(f"{path}warped_img_{name}.jpg", warped_img.cpu().numpy()[0].transpose(1, 2, 0).astype(np.uint8))
-    cv2.imwrite(f"{path}hit_img_{name}.jpg", hit_vis)
-    cv2.imwrite(f"{path}diff_img_{name}.jpg", diff_img[0].transpose(1, 2, 0))
-    print(f"Diff mean: {diff_img.mean()}, max: {diff_img.max()}")
-
-def visualize_hit(hit):
-    """
-    hit: [N,1,H,W] torch.Tensor, int (0,1,2,...)
-    return: [H,W,3] uint8 (BGR)
-    """
-    hmap = hit[0,0].cpu().numpy().astype(np.int32)
-    H, W = hmap.shape
-
-    vis = np.zeros((H,W,3), dtype=np.uint8)
-
-    vis[hmap == 0] = (255, 0, 0)   # none-to-one → 藍 (BGR)
-    vis[hmap == 1] = (0, 255, 0)   # one-to-one  → 綠
-    vis[hmap >= 2] = (0, 0, 255)   # many-to-one → 紅
-
-    return vis
-
 @torch.no_grad()
 def demo_data(name, args, model, warping_module, image1, image2, flow_gt, bmv_0_path=None):
     path = f"demo/{name}/"
@@ -131,16 +103,21 @@ def demo_data(name, args, model, warping_module, image1, image2, flow_gt, bmv_0_
     H, W = image1.shape[2:]
     cv2.imwrite(f"{path}image1.jpg", image1[0].permute(1, 2, 0).cpu().numpy())
     cv2.imwrite(f"{path}image2.jpg", image2[0].permute(1, 2, 0).cpu().numpy())
+
     flow_gt_vis = flow_to_image(flow_gt[0].permute(1, 2, 0).cpu().numpy(), convert_to_bgr=False)
     cv2.imwrite(f"{path}gt.jpg", flow_gt_vis)
+    
     flow, info = calc_flow(args, model, image1, image2)
     flow_vis = flow_to_image(flow[0].permute(1, 2, 0).cpu().numpy(), convert_to_bgr=False)
     cv2.imwrite(f"{path}flow_final.jpg", flow_vis)
+    
     diff = flow_gt - flow
     diff_vis = flow_to_image(diff[0].permute(1, 2, 0).cpu().numpy(), convert_to_bgr=False)
     cv2.imwrite(f"{path}error_final.jpg", diff_vis)
+    
     heatmap = get_heatmap(info, args)
     vis_heatmap(f"{path}heatmap_final.jpg", image1[0].permute(1, 2, 0).cpu().numpy(), heatmap[0].permute(1, 2, 0).cpu().numpy())
+    
     epe = torch.sum((flow - flow_gt)**2, dim=1).sqrt()
     print(f"EPE: {epe.mean().cpu().item()}")
 
@@ -148,8 +125,15 @@ def demo_data(name, args, model, warping_module, image1, image2, flow_gt, bmv_0_
     demo_warping(warping_module, image1, image2, flow, path, name="forward")
 
     # backward warping for flow direction check
-    bmv, depth = load_backward_velocity(bmv_0_path)
-    demo_warping(warping_module, image1, image2, bmv, path, name="backward")
+    if bmv_0_path is not None:
+        bmv, depth = load_backward_velocity(bmv_0_path)
+        demo_warping(warping_module, image1, image2, bmv, path, name="backward")
+
+        bmv_vis = flow_to_image(bmv[0].permute(1, 2, 0).cpu().numpy(), convert_to_bgr=False)
+        cv2.imwrite(f"{path}flow_gameData.jpg", flow_vis)
+
+        epe = torch.sum((flow - bmv)**2, dim=1).sqrt()
+        print(f"EPE: {epe.mean().cpu().item()}")
 
 def FRPG_loader(name, model, warping_module, img_0_path, img_1_path, img_gt_path, args, bmv_0_path=None):
     image1 = cv2.imread(img_0_path)
@@ -167,20 +151,17 @@ def FRPG_loader(name, model, warping_module, img_0_path, img_1_path, img_gt_path
 
     demo_data(name, args, model, warping_module, image1, image2, flow_gt, bmv_0_path)
 
-def load_backward_velocity(exr_path):
-    exr_data = loadEXR(exr_path)  # HWC, float32
-    height, width, _ = exr_data.shape
+def demo_warping(warping_module, src_image, target_image, flow, path, name):
+    # demo warping function
+    warping_module.warp(src_image, flow)
+    warped_img, _ = warping_module.get_warping_result(mode="average")
+    hit_vis = warping_module.visualize_hit()
+    diff_img = np.abs(warped_img.cpu().numpy() - target_image.cpu().numpy())
 
-    # Extract the backward velocity channels (assuming they are in the first two channels)
-    motion_1_to_0 = np.stack([exr_data[..., 2], exr_data[..., 1]], axis=-1)  # HWC, float32
-    motion_1_to_0[..., 0] = width * motion_1_to_0[..., 0]   # x 軸
-    motion_1_to_0[..., 1] = -1 * height * motion_1_to_0[..., 1]  # y 軸反向
-    backward_velocity = torch.from_numpy(motion_1_to_0).permute(2, 0, 1).unsqueeze(0).float().cuda()  # NCHW, float32
-
-    # Extract the depth channel (assuming it's in the third channel)
-    depth_0 = exr_data[..., 0]  # HW, float32
-    depth_0 = torch.from_numpy(depth_0).unsqueeze(0).unsqueeze(0).float().cuda()  # NCHW, float32
-    return backward_velocity, depth_0
+    cv2.imwrite(f"{path}warped_img_{name}.jpg", warped_img.cpu().numpy()[0].transpose(1, 2, 0).astype(np.uint8))
+    cv2.imwrite(f"{path}hit_img_{name}.jpg", hit_vis)
+    cv2.imwrite(f"{path}diff_img_{name}.jpg", diff_img[0].transpose(1, 2, 0))
+    print(f"Diff mean: {diff_img.mean()}, max: {diff_img.max()}")
 
 def main():
     parser = argparse.ArgumentParser()

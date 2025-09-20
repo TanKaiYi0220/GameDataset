@@ -107,7 +107,7 @@ def demo_data(name, args, model, warping_module, image1, image2, flow_gt, bmv_0_
     flow_gt_vis = flow_to_image(flow_gt[0].permute(1, 2, 0).cpu().numpy(), convert_to_bgr=False)
     cv2.imwrite(f"{path}gt.jpg", flow_gt_vis)
     
-    flow, info = calc_flow(args, model, image1, image2)
+    flow, info = calc_flow(args, model, image2, image1)
     flow_vis = flow_to_image(flow[0].permute(1, 2, 0).cpu().numpy(), convert_to_bgr=False)
     cv2.imwrite(f"{path}flow_final.jpg", flow_vis)
     
@@ -122,15 +122,15 @@ def demo_data(name, args, model, warping_module, image1, image2, flow_gt, bmv_0_
     print(f"EPE: {epe.mean().cpu().item()}")
 
     # forward warp for flow direction check
-    demo_warping(warping_module, image1, image2, flow, path, name="forward")
+    demo_warping(warping_module, image2, image1, flow, path, name="opticalFlow_backward")
 
     # backward warping for flow direction check
     if bmv_0_path is not None:
         bmv, depth = load_backward_velocity(bmv_0_path)
-        demo_warping(warping_module, image1, image2, bmv, path, name="backward")
+        demo_warping(warping_module, image2, image1, bmv, path, name="gameMotion_backward")
 
         bmv_vis = flow_to_image(bmv[0].permute(1, 2, 0).cpu().numpy(), convert_to_bgr=False)
-        cv2.imwrite(f"{path}flow_gameData.jpg", flow_vis)
+        cv2.imwrite(f"{path}flow_gameData.jpg", bmv_vis)
 
         epe = torch.sum((flow - bmv)**2, dim=1).sqrt()
         print(f"EPE: {epe.mean().cpu().item()}")

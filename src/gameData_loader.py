@@ -8,8 +8,8 @@ def load_backward_velocity(exr_path):
 
     # Extract the backward velocity channels (assuming they are in the first two channels)
     motion_1_to_0 = np.stack([exr_data[..., 2], exr_data[..., 1]], axis=-1)  # HWC, float32
-    motion_1_to_0[..., 0] = width * motion_1_to_0[..., 0]   # x 軸
-    motion_1_to_0[..., 1] = -1 * height * motion_1_to_0[..., 1]  # y 軸反向
+    motion_1_to_0[..., 0] = -1 * width * motion_1_to_0[..., 0]   # x 軸
+    motion_1_to_0[..., 1] = height * motion_1_to_0[..., 1]  # y 軸反向
     backward_velocity = torch.from_numpy(motion_1_to_0).permute(2, 0, 1).unsqueeze(0).float().cuda()  # NCHW, float32
 
     # Extract the depth channel (assuming it's in the third channel)

@@ -9,7 +9,6 @@ sys.path.append('models/SEARAFT/core')
 
 import argparse
 import cv2
-import math
 import numpy as np
 import json
 
@@ -223,8 +222,16 @@ def main():
     warping_module = Warping(warp_mode="nearest")
 
     # template for loading FRPG images
-    dataset_dir_path = "/home/kevin/Desktop/VFI/offline_dataset/datasets/AnimeFantasyRPG/0_Easy/0_Easy_0/fps_30/"
-    FRPG_loader("SEARAFT/AnimeFantasyRPG/0_Easy/0_Easy_0/fps_30/", model, warping_module, dataset_dir_path, args)
+    dataset_root_path = "/datasets/VFI/datasets/AnimeFantasyRPG/"
+    dataset_mode_path = [
+        "0_Easy/0_Easy_0/fps_30/", 
+        "0_Medium/0_Medium_0/fps_30/", 
+        "0_Difficult/0_Difficult_0/fps_30/"
+    ]
+
+    for mode in dataset_mode_path:
+        dataset_dir_path = os.path.join(dataset_root_path, mode)
+        FRPG_loader(f"SEARAFT/AnimeFantasyRPG/{mode}", model, warping_module, dataset_dir_path, args)
 
 
 if __name__ == '__main__':

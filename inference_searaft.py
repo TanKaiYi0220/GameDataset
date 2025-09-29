@@ -1,7 +1,7 @@
 import os
 os.environ["OPENCV_IO_ENABLE_OPENEXR"] = "1"
 from src.gameData_loader import load_backward_velocity
-from src.warp_module import Warping
+from src.warp_module import ForwardWarpingNearest, BackwardWarpingNearest
 from src.utils import find_max_index_in_dir, save_img, EXR_to_PNG
 
 import sys
@@ -24,6 +24,7 @@ from models.SEARAFT.core.utils.flow_viz import flow_to_image
 from models.SEARAFT.core.utils.utils import load_ckpt
 
 from tqdm import tqdm
+from skimage.metrics import peak_signal_noise_ratio as psnr
 
 def create_color_bar(height, width, color_map):
     """
@@ -109,24 +110,13 @@ def warping(warping_module, src_image, target_image, flow, path, name):
     cv2.imwrite(f"{path}hit_img_{name}.jpg", hit_vis)
     cv2.imwrite(f"{path}diff_img_{name}.jpg", diff_img[0].transpose(1, 2, 0))
 
-    return warped_img
-
-def backward_warping(warping_module, src_image, target_image, flow, path, name):
-    # demo warping function
-    warping_module.warp_backward_nearest(src_image, flow)
-    warped_img, _ = warping_module.get_warping_result(mode="average")
-    hit_vis = warping_module.visualize_hit()
-    diff_img = np.abs(warped_img.cpu().numpy() - target_image.cpu().numpy())
-
-    cv2.imwrite(f"{path}warped_img_{name}.jpg", warped_img.cpu().numpy()[0].transpose(1, 2, 0).astype(np.uint8))
-    cv2.imwrite(f"{path}hit_img_{name}.jpg", hit_vis)
-    cv2.imwrite(f"{path}diff_img_{name}.jpg", diff_img[0].transpose(1, 2, 0))
+    exit()
 
     return warped_img
 
 @torch.no_grad()
-def inference(name, args, model, warping_module, image1, image2, bmv):
-    path = f"output/{name}/"
+def inference(name, args, model, image1, image2, bmv):
+    path = name
     os.system(f"mkdir -p {path}")
     H, W = image1.shape[2:]
     cv2.imwrite(f"{path}image1.jpg", image1[0].permute(1, 2, 0).cpu().numpy())
@@ -139,64 +129,44 @@ def inference(name, args, model, warping_module, image1, image2, bmv):
     heatmap = get_heatmap(info, args)
     vis_heatmap(f"{path}heatmap_final.jpg", image1[0].permute(1, 2, 0).cpu().numpy(), heatmap[0].permute(1, 2, 0).cpu().numpy())
     
-
-    # forward warp for flow direction check
-    warped_img_flow = warping(warping_module, image2, image1, flow, path, name="opticalFlow_forward")
-
-    # forward warping for motion field direction check
-    warped_img_motion = warping(warping_module, image2, image1, bmv, path, name="gameMotion_forward")
-
-    # backward warp for flow direction check
-    warped_img_flow_back = backward_warping(warping_module, image1, image2, flow, path, name="opticalFlow_backward")
-
-    # backward warp for motion field direction check
-    warped_img_motion_back = backward_warping(warping_module, image1, image2, bmv, path, name="gameMotion_backward")
-
     bmv_vis = flow_to_image(bmv[0].permute(1, 2, 0).cpu().numpy(), convert_to_bgr=False)
     cv2.imwrite(f"{path}flow_gameData.jpg", bmv_vis)
 
-    epe = torch.sum((flow - bmv)**2, dim=1).sqrt()
-    psnr_flow = 10 * torch.log10(255.0 ** 2 / (torch.mean((warped_img_flow - image1) ** 2)))
-    psnr_motion = 10 * torch.log10(255.0 ** 2 / (torch.mean((warped_img_motion - image1) ** 2)))
+    return flow, info
 
-    return epe.mean().cpu().item(), psnr_flow.cpu().item(), psnr_motion.cpu().item()
+def warping(warping_module, src_image, target_image, flow, path, name):
+    # demo warping function
+    warping_module.warp(src_image, flow)
+    warped_img, _ = warping_module.get_warping_result(mode="average")
+    hit_vis = warping_module.visualize_hit()
+    diff_img = np.abs(warped_img.cpu().numpy() - target_image.cpu().numpy())
 
-def FRPG_loader(name, model, warping_module, dataset_dir_path, args):
-    max_index = find_max_index_in_dir(dataset_dir_path)
-    print(max_index)
+    cv2.imwrite(f"{path}warped_img_{name}.jpg", warped_img.cpu().numpy()[0].transpose(1, 2, 0).astype(np.uint8))
+    cv2.imwrite(f"{path}hit_img_{name}.jpg", hit_vis)
+    cv2.imwrite(f"{path}diff_img_{name}.jpg", diff_img[0].transpose(1, 2, 0))
 
-    epe_scores = []
-    psnr_flow_scores = []
-    psnr_motion_scores = []
+    return warped_img
 
-    with tqdm(range(max_index // 10 - 1)) as pbar:
-        for i in pbar:
-            image_1_path = f"{dataset_dir_path}colorNoScreenUI_{i}.exr"
-            image_2_path = f"{dataset_dir_path}colorNoScreenUI_{i + 1}.exr"
-            image_1 = EXR_to_PNG(image_1_path)
-            image_2 = EXR_to_PNG(image_2_path)
+def evaluation(optical_flow, game_motion, warped_img_flow, warped_img_motion, target_image):
+    # epe score
+    epe = torch.norm(optical_flow - game_motion, dim=1).mean().cpu().item()
 
-            save_img(f"{dataset_dir_path}colorNoScreenUI_{i}.png", image_1)
-            save_img(f"{dataset_dir_path}colorNoScreenUI_{i + 1}.png", image_2)
+    # psnr score (skimage.metrics.peak_signal_noise_ratio)
+    warped_img_flow_np = warped_img_flow[0].permute(1, 2, 0).cpu().numpy().astype(np.uint8)
+    warped_img_motion_np = warped_img_motion[0].permute(1, 2, 0).cpu().numpy().astype(np.uint8)
+    target_image_np = target_image[0].permute(1, 2, 0).cpu().numpy().astype(np.uint8)
+    psnr_flow = psnr(target_image_np, warped_img_flow_np, data_range=255)
+    psnr_motion = psnr(target_image_np, warped_img_motion_np, data_range=255)
+    if np.isfinite(psnr_flow) == False:
+        print("Identical images (PSNR=inf). Setting PSNR to 0.")
+        psnr_flow = 0
+    if np.isfinite(psnr_motion) == False:
+        print("Identical images (PSNR=inf). Setting PSNR to 0.")
+        psnr_motion = 0
 
-            image_1 = cv2.imread(f"{dataset_dir_path}colorNoScreenUI_{i}.png")
-            image_2 = cv2.imread(f"{dataset_dir_path}colorNoScreenUI_{i + 1}.png")
+    return epe, psnr_flow, psnr_motion
 
-            image_1 = torch.from_numpy(image_1).permute(2, 0, 1).unsqueeze(0).float().cuda()
-            image_2 = torch.from_numpy(image_2).permute(2, 0, 1).unsqueeze(0).float().cuda()
-
-            bmv_0_path = f"{dataset_dir_path}backwardVel_Depth_{i + 1}.exr"
-            bmv, depth = load_backward_velocity(bmv_0_path)
-
-            file_name = f"{name}/results/frame_{i:04d}_to_{i+1:04d}/"
-
-            epe, psnr_flow, psnr_motion = inference(file_name, args, model, warping_module, image_1, image_2, bmv)
-            pbar.set_postfix({"EPE": f"{epe:.4f}", "PSNR Flow": f"{psnr_flow:.4f}", "PSNR Motion": f"{psnr_motion:.4f}"})
-
-            epe_scores.append(epe)
-            psnr_flow_scores.append(psnr_flow)
-            psnr_motion_scores.append(psnr_motion)
-
+def save_results_json(name, dataset_dir_path, args, epe_scores, psnr_flow_scores, psnr_motion_scores):
     # Prepare JSON result
     # epe stats
     max_epe = max(epe_scores)
@@ -278,9 +248,58 @@ def FRPG_loader(name, model, warping_module, dataset_dir_path, args):
         }
     }
 
-    # Save to JSON file
-    with open(f"output/{name}/exp_results.json", "w") as f:
+    # Save results to JSON file
+    with open(f"output/{name}/results.json", "w") as f:
         json.dump(results, f, indent=4)
+
+def FRPG_loader(name, model, forward_warping_module, backward_warping_module, dataset_dir_path, args):
+    max_index = find_max_index_in_dir(dataset_dir_path)
+    print(max_index)
+
+    epe_scores = []
+    psnr_flow_scores = []
+    psnr_motion_scores = []
+
+    with tqdm(range(max_index - 1)) as pbar:
+        for i in pbar:
+            image_1_path = f"{dataset_dir_path}colorNoScreenUI_{i}.exr"
+            image_2_path = f"{dataset_dir_path}colorNoScreenUI_{i + 1}.exr"
+            image_1 = EXR_to_PNG(image_1_path)
+            image_2 = EXR_to_PNG(image_2_path)
+
+            save_img(f"{dataset_dir_path}colorNoScreenUI_{i}.png", image_1)
+            save_img(f"{dataset_dir_path}colorNoScreenUI_{i + 1}.png", image_2)
+
+            image_1 = cv2.imread(f"{dataset_dir_path}colorNoScreenUI_{i}.png")
+            image_2 = cv2.imread(f"{dataset_dir_path}colorNoScreenUI_{i + 1}.png")
+
+            image_1 = torch.from_numpy(image_1).permute(2, 0, 1).unsqueeze(0).float().cuda()
+            image_2 = torch.from_numpy(image_2).permute(2, 0, 1).unsqueeze(0).float().cuda()
+
+            bmv_0_path = f"{dataset_dir_path}backwardVel_Depth_{i + 1}.exr"
+            bmv, depth = load_backward_velocity(bmv_0_path)
+
+            output_path = f"output/{name}"
+
+            folder_name = f"{output_path}/results/frame_{i:04d}_to_{i+1:04d}/"
+
+            flow, info = inference(folder_name, args, model, image_1, image_2, bmv)
+
+            warped_img_fw_flow = warping(forward_warping_module, image_2, image_1, flow, folder_name, "opticalFlow_forward")
+            warped_img_fw_motion = warping(forward_warping_module, image_2, image_1, bmv, folder_name, "gameMotion_forward")
+            
+            warped_img_bw_flow = warping(backward_warping_module, image_1, image_2, flow, folder_name, "opticalFlow_backward")
+            warped_img_bw_motion = warping(backward_warping_module, image_1, image_2, bmv, folder_name, "gameMotion_backward")
+
+            epe, psnr_flow, psnr_motion = evaluation(flow, bmv, warped_img_bw_flow, warped_img_bw_motion, image_1)
+
+            pbar.set_postfix({"EPE": f"{epe:.4f}", "PSNR Flow": f"{psnr_flow:.4f}", "PSNR Motion": f"{psnr_motion:.4f}"})
+
+            epe_scores.append(epe)
+            psnr_flow_scores.append(psnr_flow)
+            psnr_motion_scores.append(psnr_motion)
+
+    save_results_json(name, dataset_dir_path, args, epe_scores, psnr_flow_scores, psnr_motion_scores)
 
 def main():
     parser = argparse.ArgumentParser()
@@ -293,19 +312,20 @@ def main():
     model = model.cuda()
     model.eval()
 
-    warping_module = Warping(warp_mode="nearest")
+    forward_warping_module = ForwardWarpingNearest()
+    backward_warping_module = BackwardWarpingNearest()
 
     # template for loading FRPG images
     dataset_root_path = "/datasets/VFI/datasets/AnimeFantasyRPG/"
     dataset_mode_path = [
         "0_Easy/0_Easy_0/fps_30/", 
-        # "0_Medium/0_Medium_0/fps_30/", 
+        "0_Medium/0_Medium_0/fps_30/", 
         # "0_Difficult/0_Difficult_0/fps_30/"
     ]
 
     for mode in dataset_mode_path:
         dataset_dir_path = os.path.join(dataset_root_path, mode)
-        FRPG_loader(f"SEARAFT/AnimeFantasyRPG/{mode}", model, warping_module, dataset_dir_path, args)
+        FRPG_loader(f"SEARAFT/AnimeFantasyRPG/{mode}", model, forward_warping_module, backward_warping_module, dataset_dir_path, args)
 
 
 if __name__ == '__main__':

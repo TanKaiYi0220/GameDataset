@@ -3,14 +3,14 @@ import json
 import pandas as pd
 import matplotlib.pyplot as plt
 
-def vis_line_chart(name, data_frame, upper, lower):
+def vis_line_chart(name, data_frame, upper, lower, mode):
     # visualize all results with matplotlib
     plt.figure(figsize=(10, 6))
     plt.plot(data_frame, label="EPE Scores", marker='o', linestyle='None')
     plt.axhline(y=data_frame.mean().values[0], color='g', linestyle='--', label='Mean EPE (Filtered)')
     plt.axhline(y=upper.values[0], color='r', linestyle='--', label='Upper Bound (IQR)')
     plt.axhline(y=lower.values[0], color='b', linestyle='--', label='Lower Bound (IQR)')
-    plt.title('EPE Scores with IQR Filtering')
+    plt.title(f'EPE Scores with IQR Filtering - {mode}')
     plt.xlabel('Sample Index')
     plt.ylabel('EPE Score')
     plt.legend()
@@ -46,7 +46,7 @@ def main():
 
             vis_line_chart(
                 f"{output_root_path}/{mode}/epe_scores_chart.png", 
-                epe_scores_df, upper, lower
+                epe_scores_df, upper, lower, mode
             )
 
             print("Json Path:", json_path)
@@ -68,6 +68,16 @@ def main():
             print(f"Mean EPE (Over Upper) = {over_upper_df.mean().values[0]}")
             print(f"Min  EPE (Over Upper) = {over_upper_df.min().values[0]}, index = {over_upper_df.idxmin().values[0]}")
             print(f"Max  EPE (Over Upper) = {over_upper_df.max().values[0]}, index = {over_upper_df.idxmax().values[0]}")
+
+            print("=== Over Lower EPE Statistics ===")
+            lower_upper_df = epe_scores_df[epe_scores_df < lower].dropna()
+            if lower_upper_df.empty:
+                print("No data points below the lower bound.")
+            else:
+                print("Count (Over Lower) = ", len(lower_upper_df))
+                print(f"Mean EPE (Over Lower) = {lower_upper_df.mean().values[0]}")
+                print(f"Min  EPE (Over Lower) = {lower_upper_df.min().values[0]}, index = {lower_upper_df.idxmin().values[0]}")
+                print(f"Max  EPE (Over Lower) = {lower_upper_df.max().values[0]}, index = {lower_upper_df.idxmax().values[0]}")
         print()
 
 if __name__ == "__main__":

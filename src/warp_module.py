@@ -68,6 +68,50 @@ class Warping:
             self.out = out
             self.hit = hit
 
+    def warp_backward_nearest(self, src_image, flow_t2s):
+        """
+        src_image: [N, C, H, W] 來源影像
+        flow_t2s : [N, 2, H, W] 目標→來源 的位移（像素座標；dx, dy）
+                對於目標(u,v)，來源座標 = (u + dx, v + dy)
+        return:
+        out : [N, C, H, W]  最近鄰取樣結果
+        mask: [N, 1, H, W]  True 表示座標在合法邊界內
+        """
+        N, C, H, W = src_image.shape
+        device = src_image.device
+
+        # 目標網格 (u,v)
+        v, u = torch.meshgrid(
+            torch.arange(H, device=device),
+            torch.arange(W, device=device),
+            indexing='ij'
+        )
+        u = u[None].float().expand(N, -1, -1)  # [N,H,W]
+        v = v[None].float().expand(N, -1, -1)
+
+        # 目標 -> 來源 的連續座標
+        xs = u + flow_t2s[:, 0]   # [N,H,W]
+        ys = v + flow_t2s[:, 1]   # [N,H,W]
+
+        # 最近鄰（四捨五入）+ 邊界檢查
+        xsn = xs.round().long()
+        ysn = ys.round().long()
+        mask = (xsn >= 0) & (xsn < W) & (ysn >= 0) & (ysn < H)  # [N,H,W]
+
+        # 建立扁平索引，從來源抓取（gather）
+        xsn_c = xsn.clamp(0, W - 1)
+        ysn_c = ysn.clamp(0, H - 1)
+        base = (torch.arange(N, device=device) * (H * W)).view(N, 1, 1)
+        flat_idx = (ysn_c * W + xsn_c + base).view(-1)                  # [N*H*W]
+        src_flat = src_image.permute(0, 2, 3, 1).reshape(-1, C)         # [N*H*W, C]
+
+        out = src_flat[flat_idx].view(N, H, W, C).permute(0, 3, 1, 2)   # [N,C,H,W]
+        # 對越界處清 0（可改成其他 padding 值）
+        out = out * mask[:, None, :, :]
+        
+        self.out = out
+        self.hit = mask[:, None, :, :].float()
+
     def get_warping_result(self, mode="average"):
         valid_modes = ["average", "raw"]
         if mode not in valid_modes:

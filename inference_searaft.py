@@ -109,6 +109,21 @@ def warping(warping_module, src_image, target_image, flow, path, name):
     cv2.imwrite(f"{path}hit_img_{name}.jpg", hit_vis)
     cv2.imwrite(f"{path}diff_img_{name}.jpg", diff_img[0].transpose(1, 2, 0))
 
+    return warped_img
+
+def backward_warping(warping_module, src_image, target_image, flow, path, name):
+    # demo warping function
+    warping_module.warp_backward_nearest(src_image, flow)
+    warped_img, _ = warping_module.get_warping_result(mode="average")
+    hit_vis = warping_module.visualize_hit()
+    diff_img = np.abs(warped_img.cpu().numpy() - target_image.cpu().numpy())
+
+    cv2.imwrite(f"{path}warped_img_{name}.jpg", warped_img.cpu().numpy()[0].transpose(1, 2, 0).astype(np.uint8))
+    cv2.imwrite(f"{path}hit_img_{name}.jpg", hit_vis)
+    cv2.imwrite(f"{path}diff_img_{name}.jpg", diff_img[0].transpose(1, 2, 0))
+
+    return warped_img
+
 @torch.no_grad()
 def inference(name, args, model, warping_module, image1, image2, bmv):
     path = f"output/{name}/"
@@ -126,25 +141,35 @@ def inference(name, args, model, warping_module, image1, image2, bmv):
     
 
     # forward warp for flow direction check
-    warping(warping_module, image2, image1, flow, path, name="opticalFlow_backward")
+    warped_img_flow = warping(warping_module, image2, image1, flow, path, name="opticalFlow_forward")
 
-    # backward warping for flow direction check
-    warping(warping_module, image2, image1, bmv, path, name="gameMotion_backward")
+    # forward warping for motion field direction check
+    warped_img_motion = warping(warping_module, image2, image1, bmv, path, name="gameMotion_forward")
+
+    # backward warp for flow direction check
+    warped_img_flow_back = backward_warping(warping_module, image1, image2, flow, path, name="opticalFlow_backward")
+
+    # backward warp for motion field direction check
+    warped_img_motion_back = backward_warping(warping_module, image1, image2, bmv, path, name="gameMotion_backward")
 
     bmv_vis = flow_to_image(bmv[0].permute(1, 2, 0).cpu().numpy(), convert_to_bgr=False)
     cv2.imwrite(f"{path}flow_gameData.jpg", bmv_vis)
 
     epe = torch.sum((flow - bmv)**2, dim=1).sqrt()
+    psnr_flow = 10 * torch.log10(255.0 ** 2 / (torch.mean((warped_img_flow - image1) ** 2)))
+    psnr_motion = 10 * torch.log10(255.0 ** 2 / (torch.mean((warped_img_motion - image1) ** 2)))
 
-    return epe.mean().cpu().item()
+    return epe.mean().cpu().item(), psnr_flow.cpu().item(), psnr_motion.cpu().item()
 
 def FRPG_loader(name, model, warping_module, dataset_dir_path, args):
     max_index = find_max_index_in_dir(dataset_dir_path)
     print(max_index)
 
     epe_scores = []
+    psnr_flow_scores = []
+    psnr_motion_scores = []
 
-    with tqdm(range(max_index - 1)) as pbar:
+    with tqdm(range(max_index // 10 - 1)) as pbar:
         for i in pbar:
             image_1_path = f"{dataset_dir_path}colorNoScreenUI_{i}.exr"
             image_2_path = f"{dataset_dir_path}colorNoScreenUI_{i + 1}.exr"
@@ -165,17 +190,33 @@ def FRPG_loader(name, model, warping_module, dataset_dir_path, args):
 
             file_name = f"{name}/results/frame_{i:04d}_to_{i+1:04d}/"
 
-            epe = inference(file_name, args, model, warping_module, image_1, image_2, bmv)
-            pbar.set_postfix({"EPE": f"{epe:.4f}"})
+            epe, psnr_flow, psnr_motion = inference(file_name, args, model, warping_module, image_1, image_2, bmv)
+            pbar.set_postfix({"EPE": f"{epe:.4f}", "PSNR Flow": f"{psnr_flow:.4f}", "PSNR Motion": f"{psnr_motion:.4f}"})
 
             epe_scores.append(epe)
+            psnr_flow_scores.append(psnr_flow)
+            psnr_motion_scores.append(psnr_motion)
 
     # Prepare JSON result
+    # epe stats
     max_epe = max(epe_scores)
     min_epe = min(epe_scores)
     max_idx = epe_scores.index(max_epe)
     min_idx = epe_scores.index(min_epe)
 
+    # psnr flow stats
+    max_psnr_flow = max(psnr_flow_scores)
+    min_psnr_flow = min(psnr_flow_scores)
+    max_idx_flow = psnr_flow_scores.index(max_psnr_flow)
+    min_idx_flow = psnr_flow_scores.index(min_psnr_flow)
+
+    # psnr motion stats
+    max_psnr_motion = max(psnr_motion_scores)
+    min_psnr_motion = min(psnr_motion_scores)
+    max_idx_motion = psnr_motion_scores.index(max_psnr_motion)
+    min_idx_motion = psnr_motion_scores.index(min_psnr_motion)
+
+    # results json for epe, psnr_flow, psnr_motion
     results = {
         "exp_config": {
             "dataset_dir": dataset_dir_path,
@@ -200,7 +241,40 @@ def FRPG_loader(name, model, warping_module, dataset_dir_path, args):
                     "index": idx,
                 } for idx, score in enumerate(epe_scores)
             ]
-
+        },
+        "psnr_flow_results": {
+            "mean": sum(psnr_flow_scores) / len(psnr_flow_scores),
+            "max": {
+                "score": max_psnr_flow,
+                "index": max_idx_flow
+            },
+            "min": {
+                "score": min_psnr_flow,
+                "index": min_idx_flow
+            },
+            "all": [
+                {
+                    "score": score,
+                    "index": idx,
+                } for idx, score in enumerate(psnr_flow_scores)
+            ]
+        },
+        "psnr_motion_results": {
+            "mean": sum(psnr_motion_scores) / len(psnr_motion_scores),
+            "max": {
+                "score": max_psnr_motion,
+                "index": max_idx_motion
+            },
+            "min": {
+                "score": min_psnr_motion,
+                "index": min_idx_motion
+            },
+            "all": [
+                {
+                    "score": score,
+                    "index": idx,
+                } for idx, score in enumerate(psnr_motion_scores)
+            ]
         }
     }
 
@@ -225,8 +299,8 @@ def main():
     dataset_root_path = "/datasets/VFI/datasets/AnimeFantasyRPG/"
     dataset_mode_path = [
         "0_Easy/0_Easy_0/fps_30/", 
-        "0_Medium/0_Medium_0/fps_30/", 
-        "0_Difficult/0_Difficult_0/fps_30/"
+        # "0_Medium/0_Medium_0/fps_30/", 
+        # "0_Difficult/0_Difficult_0/fps_30/"
     ]
 
     for mode in dataset_mode_path:

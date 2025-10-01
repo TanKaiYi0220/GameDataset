@@ -1,7 +1,7 @@
 import os
 os.environ["OPENCV_IO_ENABLE_OPENEXR"] = "1"
 from src.gameData_loader import load_backward_velocity
-from src.warp_module import ForwardWarpingNearest, BackwardWarpingNearest
+from src.warp_module import ForwardWarpingNearest, BackwardWarpingNearest, ForwardWarpingNearestWithDepth
 from src.utils import find_max_index_in_dir, save_img, EXR_to_PNG
 
 import sys
@@ -137,6 +137,19 @@ def inference(name, args, model, image1, image2, bmv):
 def warping(warping_module, src_image, target_image, flow, path, name):
     # demo warping function
     warping_module.warp(src_image, flow)
+    warped_img, _ = warping_module.get_warping_result(mode="average")
+    hit_vis = warping_module.visualize_hit()
+    diff_img = np.abs(warped_img.cpu().numpy() - target_image.cpu().numpy())
+
+    cv2.imwrite(f"{path}warped_img_{name}.jpg", warped_img.cpu().numpy()[0].transpose(1, 2, 0).astype(np.uint8))
+    cv2.imwrite(f"{path}hit_img_{name}.jpg", hit_vis)
+    cv2.imwrite(f"{path}diff_img_{name}.jpg", diff_img[0].transpose(1, 2, 0))
+
+    return warped_img
+
+def warping_with_depth(warping_module, src_image, target_image, flow, depth, path, name):
+    # demo warping function
+    warping_module.warp(src_image, flow, depth)
     warped_img, _ = warping_module.get_warping_result(mode="average")
     hit_vis = warping_module.visualize_hit()
     diff_img = np.abs(warped_img.cpu().numpy() - target_image.cpu().numpy())
@@ -285,8 +298,11 @@ def FRPG_loader(name, model, forward_warping_module, backward_warping_module, da
 
             flow, info = inference(folder_name, args, model, image_1, image_2, bmv)
 
-            warped_img_fw_flow = warping(forward_warping_module, image_2, image_1, flow, folder_name, "opticalFlow_forward")
-            warped_img_fw_motion = warping(forward_warping_module, image_2, image_1, bmv, folder_name, "gameMotion_forward")
+            # warped_img_fw_flow = warping(forward_warping_module, image_2, image_1, flow, folder_name, "opticalFlow_forward")
+            # warped_img_fw_motion = warping(forward_warping_module, image_2, image_1, bmv, folder_name, "gameMotion_forward")
+            
+            warped_img_fw_flow = warping_with_depth(forward_warping_module, image_2, image_1, flow, depth, folder_name, "opticalFlow_depth_forward")
+            warped_img_fw_motion = warping_with_depth(forward_warping_module, image_2, image_1, bmv, depth, folder_name, "gameMotion_depth_forward")
             
             warped_img_bw_flow = warping(backward_warping_module, image_1, image_2, flow, folder_name, "opticalFlow_backward")
             warped_img_bw_motion = warping(backward_warping_module, image_1, image_2, bmv, folder_name, "gameMotion_backward")
@@ -312,7 +328,7 @@ def main():
     model = model.cuda()
     model.eval()
 
-    forward_warping_module = ForwardWarpingNearest()
+    forward_warping_module = ForwardWarpingNearestWithDepth()
     backward_warping_module = BackwardWarpingNearest()
 
     # template for loading FRPG images

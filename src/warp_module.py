@@ -36,7 +36,6 @@ class WarpingBase:
 
     # ---- public APIs (共用) ----
     def get_warping_result(self, mode="average"):
-        valid_modes = ["average", "raw"]
         if self.out is None or self.hit is None:
             raise ValueError("No warping has been performed yet.")
 
@@ -153,6 +152,66 @@ class BackwardWarpingNearest(WarpingBase):
         # 越界清 0；hit 為 0/1
         out = out * mask[:, None, :, :]
         hit = mask[:, None, :, :].to(src_image.dtype)
+
+        self.out = out
+        self.hit = hit
+        return out, hit
+    
+class ForwardWarpingNearestWithDepth(WarpingBase):
+    """
+    Forward warping with Z-buffer occlusion handling.
+    flow 定義: source→target (來源像素 (x,y) + flow → target 位置)
+    depth: [N,1,H,W] 深度圖 (越小表示越近)
+    """
+    def warp(self, src_image: torch.Tensor, flow_s2t: torch.Tensor, depth: torch.Tensor):
+        N, C, H, W = src_image.shape
+        device = src_image.device
+
+        # 來源座標網格
+        u, v = self._make_uv_grid(N, H, W, device)
+
+        tx = u + flow_s2t[:, 0]
+        ty = v + flow_s2t[:, 1]
+
+        txn = tx.round().long()
+        tyn = ty.round().long()
+
+        # 有效範圍
+        mask = (txn >= 0) & (txn < W) & (tyn >= 0) & (tyn < H)
+
+        # ---- flatten ----
+        linear_idx = tyn.clamp(0, H - 1) * W + txn.clamp(0, W - 1)
+        base = (torch.arange(N, device=device) * (H * W)).view(N, 1, 1)
+        flat_idx = (linear_idx + base).view(-1)
+
+        src_flat = src_image.permute(0, 2, 3, 1).reshape(-1, C)
+        depth_flat = depth.view(-1)
+
+        mask_flat = mask.view(-1)
+        idx_valid = flat_idx[mask_flat]
+        depth_valid = depth_flat[mask_flat]
+        color_valid = src_flat[mask_flat]
+
+        # ---- Z-buffer with scatter_reduce ----
+        # 每個 target 的最大 depth
+        depth_buffer = torch.full((N * H * W,), float("-inf"), device=device)
+        depth_buffer.scatter_reduce_(0, idx_valid, depth_valid, reduce="amax", include_self=True)
+
+        # 選擇等於 depth_buffer 的 pixel
+        front_mask = (depth_valid == depth_buffer[idx_valid])
+
+        best_idx = idx_valid[front_mask]
+        best_color = color_valid[front_mask]
+
+        # ---- 回填到輸出 ----
+        out_flat = torch.zeros((N * H * W, C), device=device, dtype=src_image.dtype)
+        hit_flat = torch.zeros((N * H * W, 1), device=device, dtype=src_image.dtype)
+
+        out_flat[best_idx] = best_color
+        hit_flat[best_idx] = 1.0
+
+        out = out_flat.view(N, H, W, C).permute(0, 3, 1, 2)
+        hit = hit_flat.view(N, H, W, 1).permute(0, 3, 1, 2)
 
         self.out = out
         self.hit = hit

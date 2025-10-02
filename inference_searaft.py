@@ -332,7 +332,7 @@ def main():
     backward_warping_module = BackwardWarpingNearest()
 
     # template for loading FRPG images
-    dataset_root_path = "/datasets/VFI/datasets/AnimeFantasyRPG/"
+    dataset_root_path = "/datasets/VFI/datasets/AnimeFantasyRPG/AnimeFantasyRPG_3_60/"
     dataset_mode_path = [
         "0_Easy/0_Easy_0/fps_30/", 
         "0_Medium/0_Medium_0/fps_30/", 
@@ -341,7 +341,7 @@ def main():
 
     for mode in dataset_mode_path:
         dataset_dir_path = os.path.join(dataset_root_path, mode)
-        FRPG_loader(f"SEARAFT/AnimeFantasyRPG/{mode}", model, forward_warping_module, backward_warping_module, dataset_dir_path, args)
+        FRPG_loader(f"SEARAFT/AnimeFantasyRPG/AnimeFantasyRPG_3_60/{mode}", model, forward_warping_module, backward_warping_module, dataset_dir_path, args)
 
 
 if __name__ == '__main__':

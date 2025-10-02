@@ -18,6 +18,10 @@ python inference_searaft.py --cfg "./models/SEARAFT/config/eval/spring-M.json" -
 python3 inference_rife.py --exp=1 --model ./models/RIFE/train_log
 ```
 
+``` bash
+python src_analysis/analysis_0929.py
+```
+
 ## Additional Packages
 ``` bash
 pip install scikit-image # Successfully installed imageio-2.37.0 scikit-image-0.25.2

@@ -60,7 +60,7 @@ def add_color_bar_to_image(image, color_bar, orientation='vertical'):
 
 def vis_heatmap(name, image, heatmap):
     # theta = 0.01
-    # print(heatmap.max(), heatmap.min(), heatmap.mean())
+    # print(heatmap.max(), heatmap.min(), heatmap.meang error: Write Errorn())
     heatmap = heatmap[:, :, 0]
     heatmap = (heatmap - heatmap.min()) / (heatmap.max() - heatmap.min())
     # heatmap = heatmap > 0.01
@@ -73,7 +73,7 @@ def vis_heatmap(name, image, heatmap):
     # Add the color bar to the image
     overlay = overlay.astype(np.uint8)
     combined_image = add_color_bar_to_image(overlay, color_bar, 'vertical')
-    cv2.imwrite(name, cv2.cvtColor(combined_image, cv2.COLOR_RGB2BGR))
+    save_img(name, cv2.cvtColor(combined_image, cv2.COLOR_RGB2BGR))
 
 def get_heatmap(info, args):
     raw_b = info[:, 2:]
@@ -106,9 +106,9 @@ def warping(warping_module, src_image, target_image, flow, path, name):
     hit_vis = warping_module.visualize_hit()
     diff_img = np.abs(warped_img.cpu().numpy() - target_image.cpu().numpy())
 
-    cv2.imwrite(f"{path}warped_img_{name}.jpg", warped_img.cpu().numpy()[0].transpose(1, 2, 0).astype(np.uint8))
-    cv2.imwrite(f"{path}hit_img_{name}.jpg", hit_vis)
-    cv2.imwrite(f"{path}diff_img_{name}.jpg", diff_img[0].transpose(1, 2, 0))
+    save_img(f"{path}warped_img_{name}.png", warped_img.cpu().numpy()[0].transpose(1, 2, 0).astype(np.uint8))
+    save_img(f"{path}hit_img_{name}.png", hit_vis)
+    save_img(f"{path}diff_img_{name}.png", diff_img[0].transpose(1, 2, 0))
 
     exit()
 
@@ -119,18 +119,18 @@ def inference(name, args, model, image1, image2, bmv):
     path = name
     os.system(f"mkdir -p {path}")
     H, W = image1.shape[2:]
-    cv2.imwrite(f"{path}image1.jpg", image1[0].permute(1, 2, 0).cpu().numpy())
-    cv2.imwrite(f"{path}image2.jpg", image2[0].permute(1, 2, 0).cpu().numpy())
+    save_img(f"{path}image1.png", image1[0].permute(1, 2, 0).cpu().numpy())
+    save_img(f"{path}image2.png", image2[0].permute(1, 2, 0).cpu().numpy())
 
     flow, info = calc_flow(args, model, image2, image1)
     flow_vis = flow_to_image(flow[0].permute(1, 2, 0).cpu().numpy(), convert_to_bgr=False)
-    cv2.imwrite(f"{path}flow_final.jpg", flow_vis)
+    save_img(f"{path}flow_final.png", flow_vis)
     
     heatmap = get_heatmap(info, args)
-    vis_heatmap(f"{path}heatmap_final.jpg", image1[0].permute(1, 2, 0).cpu().numpy(), heatmap[0].permute(1, 2, 0).cpu().numpy())
+    vis_heatmap(f"{path}heatmap_final.png", image1[0].permute(1, 2, 0).cpu().numpy(), heatmap[0].permute(1, 2, 0).cpu().numpy())
     
     bmv_vis = flow_to_image(bmv[0].permute(1, 2, 0).cpu().numpy(), convert_to_bgr=False)
-    cv2.imwrite(f"{path}flow_gameData.jpg", bmv_vis)
+    save_img(f"{path}flow_gameData.png", bmv_vis)
 
     return flow, info
 
@@ -141,9 +141,9 @@ def warping(warping_module, src_image, target_image, flow, path, name):
     hit_vis = warping_module.visualize_hit()
     diff_img = np.abs(warped_img.cpu().numpy() - target_image.cpu().numpy())
 
-    cv2.imwrite(f"{path}warped_img_{name}.jpg", warped_img.cpu().numpy()[0].transpose(1, 2, 0).astype(np.uint8))
-    cv2.imwrite(f"{path}hit_img_{name}.jpg", hit_vis)
-    cv2.imwrite(f"{path}diff_img_{name}.jpg", diff_img[0].transpose(1, 2, 0))
+    save_img(f"{path}warped_img_{name}.png", warped_img.cpu().numpy()[0].transpose(1, 2, 0).astype(np.uint8))
+    save_img(f"{path}hit_img_{name}.png", hit_vis)
+    save_img(f"{path}diff_img_{name}.png", diff_img[0].transpose(1, 2, 0))
 
     return warped_img
 
@@ -154,9 +154,9 @@ def warping_with_depth(warping_module, src_image, target_image, flow, depth, pat
     hit_vis = warping_module.visualize_hit()
     diff_img = np.abs(warped_img.cpu().numpy() - target_image.cpu().numpy())
 
-    cv2.imwrite(f"{path}warped_img_{name}.jpg", warped_img.cpu().numpy()[0].transpose(1, 2, 0).astype(np.uint8))
-    cv2.imwrite(f"{path}hit_img_{name}.jpg", hit_vis)
-    cv2.imwrite(f"{path}diff_img_{name}.jpg", diff_img[0].transpose(1, 2, 0))
+    save_img(f"{path}warped_img_{name}.png", warped_img.cpu().numpy()[0].transpose(1, 2, 0).astype(np.uint8))
+    save_img(f"{path}hit_img_{name}.png", hit_vis)
+    save_img(f"{path}diff_img_{name}.png", diff_img[0].transpose(1, 2, 0))
 
     return warped_img
 
@@ -265,7 +265,7 @@ def save_results_json(name, dataset_dir_path, args, epe_scores, psnr_flow_scores
     with open(f"output/{name}/results.json", "w") as f:
         json.dump(results, f, indent=4)
 
-def FRPG_loader(name, model, forward_warping_module, backward_warping_module, dataset_dir_path, args):
+def FRPG_loader(name, model, forward_warping_module, forward_warping_with_depth_module, backward_warping_module, dataset_dir_path, args):
     max_index = find_max_index_in_dir(dataset_dir_path)
     print(max_index)
 
@@ -298,11 +298,11 @@ def FRPG_loader(name, model, forward_warping_module, backward_warping_module, da
 
             flow, info = inference(folder_name, args, model, image_1, image_2, bmv)
 
-            # warped_img_fw_flow = warping(forward_warping_module, image_2, image_1, flow, folder_name, "opticalFlow_forward")
-            # warped_img_fw_motion = warping(forward_warping_module, image_2, image_1, bmv, folder_name, "gameMotion_forward")
+            warped_img_fw_flow = warping(forward_warping_module, image_2, image_1, flow, folder_name, "opticalFlow_forward")
+            warped_img_fw_motion = warping(forward_warping_module, image_2, image_1, bmv, folder_name, "gameMotion_forward")
             
-            warped_img_fw_flow = warping_with_depth(forward_warping_module, image_2, image_1, flow, depth, folder_name, "opticalFlow_depth_forward")
-            warped_img_fw_motion = warping_with_depth(forward_warping_module, image_2, image_1, bmv, depth, folder_name, "gameMotion_depth_forward")
+            warped_img_fw_flow_with_depth = warping_with_depth(forward_warping_with_depth_module, image_2, image_1, flow, depth, folder_name, "opticalFlow_depth_forward")
+            warped_img_fw_motion_with_depth = warping_with_depth(forward_warping_with_depth_module, image_2, image_1, bmv, depth, folder_name, "gameMotion_depth_forward")
             
             warped_img_bw_flow = warping(backward_warping_module, image_1, image_2, flow, folder_name, "opticalFlow_backward")
             warped_img_bw_motion = warping(backward_warping_module, image_1, image_2, bmv, folder_name, "gameMotion_backward")
@@ -328,7 +328,8 @@ def main():
     model = model.cuda()
     model.eval()
 
-    forward_warping_module = ForwardWarpingNearestWithDepth()
+    forward_warping_module = ForwardWarpingNearest()
+    forward_warping_with_depth_module = ForwardWarpingNearestWithDepth()
     backward_warping_module = BackwardWarpingNearest()
 
     # template for loading FRPG images
@@ -341,7 +342,7 @@ def main():
 
     for mode in dataset_mode_path:
         dataset_dir_path = os.path.join(dataset_root_path, mode)
-        FRPG_loader(f"SEARAFT/AnimeFantasyRPG/AnimeFantasyRPG_3_60/{mode}", model, forward_warping_module, backward_warping_module, dataset_dir_path, args)
+        FRPG_loader(f"SEARAFT/AnimeFantasyRPG/AnimeFantasyRPG_3_60/{mode}", model, forward_warping_module, forward_warping_with_depth_module, backward_warping_module, dataset_dir_path, args)
 
 
 if __name__ == '__main__':

@@ -273,15 +273,25 @@ def FRPG_loader(name, model, forward_warping_module, forward_warping_with_depth_
     psnr_flow_scores = []
     psnr_motion_scores = []
 
+    print(name)
+
     with tqdm(range(max_index - 1)) as pbar:
         for i in pbar:
-            image_1_path = f"{dataset_dir_path}colorNoScreenUI_{i}.exr"
-            image_2_path = f"{dataset_dir_path}colorNoScreenUI_{i + 1}.exr"
-            image_1 = EXR_to_PNG(image_1_path)
-            image_2 = EXR_to_PNG(image_2_path)
+            write_flag = False
 
-            save_img(f"{dataset_dir_path}colorNoScreenUI_{i}.png", image_1)
-            save_img(f"{dataset_dir_path}colorNoScreenUI_{i + 1}.png", image_2)
+            image_1_flag = os.path.exists(f"{dataset_dir_path}colorNoScreenUI_{i}.png")
+            image_2_flag = os.path.exists(f"{dataset_dir_path}colorNoScreenUI_{i + 1}.png")
+
+            if not image_1_flag or not image_2_flag:
+                image_1_path = f"{dataset_dir_path}colorNoScreenUI_{i}.exr"
+                image_2_path = f"{dataset_dir_path}colorNoScreenUI_{i + 1}.exr"
+                image_1 = EXR_to_PNG(image_1_path)
+                image_2 = EXR_to_PNG(image_2_path)
+
+                save_img(f"{dataset_dir_path}colorNoScreenUI_{i}.png", image_1)
+                save_img(f"{dataset_dir_path}colorNoScreenUI_{i + 1}.png", image_2)
+
+                write_flag = True
 
             image_1 = cv2.imread(f"{dataset_dir_path}colorNoScreenUI_{i}.png")
             image_2 = cv2.imread(f"{dataset_dir_path}colorNoScreenUI_{i + 1}.png")
@@ -309,7 +319,7 @@ def FRPG_loader(name, model, forward_warping_module, forward_warping_with_depth_
 
             epe, psnr_flow, psnr_motion = evaluation(flow, bmv, warped_img_bw_flow, warped_img_bw_motion, image_1)
 
-            pbar.set_postfix({"EPE": f"{epe:.4f}", "PSNR Flow": f"{psnr_flow:.4f}", "PSNR Motion": f"{psnr_motion:.4f}"})
+            pbar.set_postfix({"EPE": f"{epe:.4f}", "PSNR Flow": f"{psnr_flow:.4f}", "PSNR Motion": f"{psnr_motion:.4f}", "NEW": write_flag})
 
             epe_scores.append(epe)
             psnr_flow_scores.append(psnr_flow)
@@ -333,16 +343,45 @@ def main():
     backward_warping_module = BackwardWarpingNearest()
 
     # template for loading FRPG images
-    dataset_root_path = "/datasets/VFI/datasets/AnimeFantasyRPG/AnimeFantasyRPG_3_60/"
+    record_name = "AnimeFantasyRPG_2_60"
+    dataset_root_path = f"/datasets/VFI/datasets/AnimeFantasyRPG/{record_name}/"
     dataset_mode_path = [
-        "0_Easy/0_Easy_0/fps_30/", 
-        "0_Medium/0_Medium_0/fps_30/", 
-        # "0_Difficult/0_Difficult_0/fps_30/"
+        # "0_Easy/0_Easy_0/fps_30/", 
+        # "0_Medium/0_Medium_0/fps_30/", 
+        # "0_Difficult/0_Difficult_0/fps_30/",
+
+        # "0_Easy/0_Easy_0/fps_60/", 
+        # "0_Medium/0_Medium_0/fps_60/", 
+        # "0_Difficult/0_Difficult_0/fps_60/",
+
+        # "4_Easy/4_Easy_0/fps_30/", 
+        # "4_Medium/4_Medium_0/fps_30/",
+        # "4_Difficult/4_Difficult_0/fps_30/", 
+
+        # "4_Easy/4_Easy_0/fps_60/", 
+        # "4_Medium/4_Medium_0/fps_60/", 
+        # "4_Difficult/4_Difficult_0/fps_60/", 
+
+        # "0_Easy/0_Easy_1/fps_30/", 
+        # "0_Medium/0_Medium_1/fps_30/", 
+        # "0_Difficult/0_Difficult_0/fps_30/",
+
+        # "0_Easy/0_Easy_1/fps_60/", 
+        # "0_Medium/0_Medium_1/fps_60/", 
+        # "0_Difficult/0_Difficult_0/fps_60/",
+
+        # "4_Easy/4_Easy_1/fps_30/", 
+        # "4_Medium/4_Medium_1/fps_30/",
+        # "4_Difficult/4_Difficult_0/fps_30/", 
+
+        "4_Easy/4_Easy_1/fps_60/", 
+        "4_Medium/4_Medium_1/fps_60/", 
+        # "4_Difficult/4_Difficult_0/fps_60/", 
     ]
 
     for mode in dataset_mode_path:
         dataset_dir_path = os.path.join(dataset_root_path, mode)
-        FRPG_loader(f"SEARAFT/AnimeFantasyRPG/AnimeFantasyRPG_3_60/{mode}", model, forward_warping_module, forward_warping_with_depth_module, backward_warping_module, dataset_dir_path, args)
+        FRPG_loader(f"SEARAFT/AnimeFantasyRPG/{record_name}/{mode}", model, forward_warping_module, forward_warping_with_depth_module, backward_warping_module, dataset_dir_path, args)
 
 
 if __name__ == '__main__':

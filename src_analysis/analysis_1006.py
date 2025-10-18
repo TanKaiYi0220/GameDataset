@@ -150,9 +150,11 @@ def main():
     record_name = "AnimeFantasyRPG_3_60"
     output_root_path = f"./output/SEARAFT/AnimeFantasyRPG/{record_name}/"
     dataset_mode_path = [
-        "0_Easy/0_Easy_0/fps_30/", 
-        "0_Medium/0_Medium_0/fps_30/", 
-        # "0_Difficult/0_Difficult_0/fps_30/"
+        # "0_Easy/0_Easy_0/fps_30/", 
+        # "0_Medium/0_Medium_0/fps_30/", 
+
+        "4_Easy/4_Easy_0/fps_30/", 
+        "4_Medium/4_Medium_0/fps_30/",
     ]
 
     analysis_path = f"./analysis_results/1006/{record_name}/"

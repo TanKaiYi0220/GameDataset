@@ -3,7 +3,7 @@ import json
 import pandas as pd
 import matplotlib.pyplot as plt
 
-def vis_scatter_chart(name, data_frame, record_name, index_key="FrameIndex", score_key="Score"):
+def vis_scatter_chart(name, data_frame, record_name, index_key="FrameIndex", score_key="Score", x_gap=20):
     # visualize all results with matplotlib
     plt.figure(figsize=(10, 6))
 
@@ -18,7 +18,7 @@ def vis_scatter_chart(name, data_frame, record_name, index_key="FrameIndex", sco
 
     plt.title(f"EPE Scores Scatter Chart - {record_name}")
     # x軸間隔 - 10 frames as a gap
-    plt.xticks(range(0, data_frame["FrameIndex"].max()+1, 20))
+    plt.xticks(range(0, data_frame["FrameIndex"].max()+1, x_gap))
     plt.xlabel("Sample Index")
     plt.ylabel("EPE Score")
     plt.legend()
@@ -30,7 +30,7 @@ def mode_rename(mode):
     difficult, _, fps, _ = mode.split("/")
     return f"{difficult}_{fps}"
 
-def get_diff(epe_scores_overall_df, mode_1, mode_2, output_root_path, record_name):
+def get_diff(epe_scores_overall_df, mode_1, mode_2, output_root_path, record_name, x_gap):
     # diff between each frame from two modes
     two_modes = [mode_1, mode_2]
     diff_df = pd.DataFrame()
@@ -43,22 +43,35 @@ def get_diff(epe_scores_overall_df, mode_1, mode_2, output_root_path, record_nam
     vis_scatter_chart(
         f"{output_root_path}/epe_scores_diff_chart_{two_modes[0]}_vs_{two_modes[1]}.png", 
         diff_df, f"{record_name} - {two_modes[0]} vs {two_modes[1]}",
-        "FrameIndex", "DiffScore"
+        "FrameIndex", "DiffScore",
+        x_gap
     )
 
     print(f"{output_root_path}/epe_scores_diff.csv")
     diff_df.to_csv(f"{output_root_path}/epe_scores_diff.csv")
 
 def main():
-    record_name = "AnimeFantasyRPG_3_60"
+    record_name = "AnimeFantasyRPG_2_60"
+    fps = "fps_60"
     output_root_path = f"./output/SEARAFT/AnimeFantasyRPG/{record_name}/"
     dataset_mode_path = [
-        "0_Easy/0_Easy_0/fps_30/", 
-        "0_Medium/0_Medium_0/fps_30/", 
-        # "0_Difficult/0_Difficult_0/fps_30/"
+        ## AnimeFantasyRPG_3_60
+        # f"0_Easy/0_Easy_0/{fps}/", 
+        # f"0_Medium/0_Medium_0/{fps}/", 
+
+        # f"4_Easy/4_Easy_0/{fps}/", 
+        # f"4_Medium/4_Medium_0/{fps}/",
+
+        ## AnimeFantasyRPG_2_60
+        # f"0_Easy/0_Easy_1/{fps}/", 
+        # f"0_Medium/0_Medium_1/{fps}/",
+
+        f"4_Easy/4_Easy_1/{fps}/", 
+        f"4_Medium/4_Medium_1/{fps}/",
     ]
 
-    analysis_path = f"./analysis_results/0929/{record_name}/"
+    comparison_name = f"{mode_rename(dataset_mode_path[0])}_vs_{mode_rename(dataset_mode_path[1])}"
+    analysis_path = f"./analysis_results/0929/{record_name}/{comparison_name}/"
     os.makedirs(analysis_path, exist_ok=True)
 
     epe_scores_overall_df = pd.DataFrame()
@@ -93,20 +106,23 @@ def main():
     # visualize EPE scores with different modes in each chart
     vis_scatter_chart(
         f"{analysis_path}/epe_scores_chart_overall.png", 
-        epe_scores_overall_df, record_name
+        epe_scores_overall_df, record_name,
+        x_gap = 20 if fps == "fps_30" else 40
     )
 
     for mode in dataset_mode_path:
         mode = mode_rename(mode)
         vis_scatter_chart(
             f"{analysis_path}/epe_scores_chart_{mode}.png", 
-            epe_scores_overall_df[epe_scores_overall_df["Mode"] == mode], f"{mode}"
+            epe_scores_overall_df[epe_scores_overall_df["Mode"] == mode], f"{mode}",
+            x_gap = 20 if fps == "fps_30" else 40
         )
 
     get_diff(
         epe_scores_overall_df, 
         mode_rename(dataset_mode_path[0]), mode_rename(dataset_mode_path[1]), 
-        analysis_path, record_name
+        analysis_path, record_name,
+        20 if fps == "fps_30" else 40
     )
 
 if __name__ == "__main__":

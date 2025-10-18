@@ -31,16 +31,16 @@ if __name__ == "__main__":
     ROOT_PATH = "/datasets/VFI/datasets/AnimeFantasyRPG/"
     RECORD_NAME = "AnimeFantasyRPG_3_60"
     MODES = [
-        "0_Easy/0_Easy_0/fps_30/", 
-        "0_Medium/0_Medium_0/fps_30/", 
+        "4_Easy/4_Easy_0/fps_30/", 
+        "4_Medium/4_Medium_0/fps_30/", 
         # "0_Difficult/0_Difficult_0/fps_30/"
     ]
     IMG_FOLDER = f"{ROOT_PATH}/{RECORD_NAME}"
 
     OUTPUT_PATH = f"./analysis_results/1006/{RECORD_NAME}"
 
-    START_INDEX = 360
-    END_INDEX = 380
+    START_INDEX = 260
+    END_INDEX = 280
     ORIGINAL_FPS = 30
     FPS = 1
 

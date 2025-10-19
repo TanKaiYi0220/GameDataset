@@ -24,5 +24,9 @@ python src_analysis/analysis_0929.py
 
 ## Additional Packages
 ``` bash
-pip install scikit-image # Successfully installed imageio-2.37.0 scikit-image-0.25.2
+# RIFE
+pip install scikit-image    # Successfully installed imageio-2.37.0 scikit-image-0.25.2
+
+# SGM-VFI
+pip insall timm==0.9.16     # Successfully installed safetensors-0.6.2 timm-0.9.16
 ```

@@ -85,6 +85,23 @@ def get_heatmap(info, args):
     heatmap = (log_b * weight).sum(dim=1, keepdim=True)
     return heatmap
 
+def vis_flow_diff(name, src_image, flow1, flow2):
+    flow_diff = torch.norm(flow1 - flow2, dim=1)
+    flow_diff = flow_diff[0].cpu().numpy()
+    flow_diff = (flow_diff - flow_diff.min()) / (flow_diff.max() - flow_diff.min())
+    flow_diff = (flow_diff * 255).astype(np.uint8)
+    colored_flow_diff = cv2.applyColorMap(flow_diff, cv2.COLORMAP_JET)
+    save_img(name, colored_flow_diff)
+
+    overlay = src_image * 0.3 + colored_flow_diff * 0.7
+    # Create a color bar
+    height, width = src_image.shape[:2]
+    color_bar = create_color_bar(50, width, cv2.COLORMAP_JET)  # Adjust the height and colormap as needed
+    # Add the color bar to the image
+    overlay = overlay.astype(np.uint8)
+    combined_image = add_color_bar_to_image(overlay, color_bar, 'vertical')
+    save_img(name, cv2.cvtColor(combined_image, cv2.COLOR_RGB2BGR))
+
 def forward_flow(args, model, image1, image2, game_motion_flow=None):
     output = model(image1, image2, iters=args.iters, test_mode=True, game_motion_flow=game_motion_flow)
     flow_net_init = output['flow'][0]
@@ -139,6 +156,8 @@ def inference(name, args, model, image1, image2, bmv):
 
     flow_vis = flow_to_image(flow_gm_init[0].permute(1, 2, 0).cpu().numpy(), convert_to_bgr=False)
     save_img(f"{path}flow_gm_init.png", flow_vis)
+
+    vis_flow_diff(f"{path}gameMotion_vs_opticalFlow.png", image2[0].permute(1, 2, 0).cpu().numpy(), bmv, flow)
 
     heatmap = get_heatmap(info, args)
     vis_heatmap(f"{path}heatmap_final.png", image1[0].permute(1, 2, 0).cpu().numpy(), heatmap[0].permute(1, 2, 0).cpu().numpy())

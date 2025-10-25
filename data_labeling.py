@@ -5,10 +5,29 @@ import os
 def get_all_modes(main_index_list, difficulty_list, sub_index, fps):
     modes = []
     for main_index in main_index_list:
+        mode = []
         for difficulty in difficulty_list:
-            mode = f"{main_index}_{difficulty}/{main_index}_{difficulty}_{sub_index}/{fps}"
-            modes.append(mode)
+            mode.append(f"{main_index}_{difficulty}/{main_index}_{difficulty}_{sub_index}/{fps}")
+        modes.append(mode)
     return modes
+
+def parse_mode_name(modes):
+    """
+    從 mode list 取出簡化名稱。
+    e.g.
+    ["0_Easy/0_Easy_0/fps_60", "0_Medium/0_Medium_0/fps_60"] → "0_Easy_Medium_0"
+    """
+    # 拿第一個 mode 拆開
+    first = modes[0].split('/')
+    main_index = first[0].split('_')[0]         # 例如 '0'
+    sub_index = first[1].split('_')[-1]         # 例如 '0'
+
+    # 把所有 mode 的第二個部分的難度名稱抓出來
+    difficulties = [m.split('/')[0].split('_')[1] for m in modes]
+
+    # 拼接結果
+    combined_name = f"{main_index}_{'_'.join(difficulties)}_{sub_index}"
+    return combined_name
 
 def save_json(image_paths, status, i, json_path="review_result.json"):
     available = [image_paths[k] for k, v in status.items() if v == "keep"]
@@ -27,6 +46,22 @@ def save_json(image_paths, status, i, json_path="review_result.json"):
         json.dump(out, f, indent=2, ensure_ascii=False)
     print(f"[Saved] {json_path}")
 
+def read_saved_status(json_path="review_result.json"):
+    if not os.path.exists(json_path):
+        return {i: "keep" for i in range(len(image_paths))}
+    
+    with open(json_path, "r", encoding="utf-8") as f:
+        data = json.load(f)
+
+    status = {}
+    for path in data.get("available_list", []):
+        index = int(os.path.basename(path).split("_")[-1].split(".")[0])
+        status[index] = "keep"
+    for path in data.get("rejected_list", []):
+        index = int(os.path.basename(path).split("_")[-1].split(".")[0])
+        status[index] = "drop"
+    return status
+
 def review_images(image_paths, json_path="review_result.json"):
     """
     一個簡單的 OpenCV 審圖工具：
@@ -38,7 +73,7 @@ def review_images(image_paths, json_path="review_result.json"):
     """
     assert len(image_paths) > 0, "image_paths 不可為空"
 
-    status = {i: "keep" for i in range(len(image_paths))}
+    status = read_saved_status(json_path)
     i = 0
     win = "Reviewer"
     cv2.namedWindow(win, cv2.WINDOW_NORMAL)
@@ -60,7 +95,7 @@ def review_images(image_paths, json_path="review_result.json"):
             color = (128, 128, 128)
 
         cv2.rectangle(img, (5, 5), (img.shape[1] - 5, img.shape[0] - 5), color, 3)
-        text = f"[{i+1}/{len(image_paths)}] {os.path.basename(image_paths[i])} | 狀態: {status[i]}"
+        text = f"[{i+1}/{len(image_paths)}] {os.path.basename(image_paths[i])} | Status: {status[i]}"
         cv2.putText(img, text, (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, color, 2)
         cv2.imshow(win, img)
 
@@ -90,7 +125,7 @@ if __name__ == "__main__":
     ROOT_PATH = "/datasets/VFI/datasets/AnimeFantasyRPG/"
     RECORD_NAME = "AnimeFantasyRPG_3_60"
     FPS = "fps_60"
-    MAIN_INDEX = "4"
+    MAIN_INDEX = "0"
     DIFFICULTY = ["Easy", "Medium"]
     SUB_INDEX = "0"
     MODES = get_all_modes([MAIN_INDEX], DIFFICULTY, SUB_INDEX, FPS)
@@ -103,22 +138,19 @@ if __name__ == "__main__":
     skip_indices = json.load(open(f"{CLEAN_PATH}/skipped_indices.json", "r"))
 
     image_paths = []
-    for i in range(MAX_INDEX):
-        available = True
-        for mode in MODES:
-            img_path = f"{CLEAN_PATH}/{mode}/overall/colorNoScreenUI_{i}.png"
 
-            if not os.path.exists(img_path) or img_path in skip_indices[mode]["Skip Indices"]:
-                available = False
-            else:
-                print("[Cleanned] ", img_path)
-        
-        if available:
-            image_paths.append(img_path)
+    print(MODES)
+
+    mode = MODES[0][-1] # only check the last difficult level (e.g., Medium, including most objects)
+    mode_name = parse_mode_name(MODES[0])
+
+    image_paths = os.listdir(f"{CLEAN_PATH}/{mode}/overall/")
+    image_paths = [f"{CLEAN_PATH}/{mode}/overall/{f}" for f in image_paths if f.endswith(".png")]
+    image_paths = sorted(image_paths, key=lambda x: int(x.split("_")[-1].split(".")[0])) # sort by frame index
 
     if not image_paths:
         print("請提供 image_paths 再執行。")
     else:
-        available, rejected = review_images(image_paths, json_path=f"{CLEAN_PATH}/{MAIN_INDEX}_{DIFFICULTY[-1]}_{SUB_INDEX}_{FPS}_review_result.json")
+        available, rejected = review_images(image_paths, json_path=f"{CLEAN_PATH}/{mode_name}_review_result.json")
         print("Available:", len(available))
         print("Rejected:", len(rejected))

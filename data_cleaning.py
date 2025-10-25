@@ -9,10 +9,29 @@ import json
 def get_all_modes(main_index_list, difficulty_list, sub_index, fps):
     modes = []
     for main_index in main_index_list:
+        mode = []
         for difficulty in difficulty_list:
-            mode = f"{main_index}_{difficulty}/{main_index}_{difficulty}_{sub_index}/{fps}"
-            modes.append(mode)
+            mode.append(f"{main_index}_{difficulty}/{main_index}_{difficulty}_{sub_index}/{fps}")
+        modes.append(mode)
     return modes
+
+def parse_mode_name(modes):
+    """
+    從 mode list 取出簡化名稱。
+    e.g.
+    ["0_Easy/0_Easy_0/fps_60", "0_Medium/0_Medium_0/fps_60"] → "0_Easy_Medium_0"
+    """
+    # 拿第一個 mode 拆開
+    first = modes[0].split('/')
+    main_index = first[0].split('_')[0]         # 例如 '0'
+    sub_index = first[1].split('_')[-1]         # 例如 '0'
+
+    # 把所有 mode 的第二個部分的難度名稱抓出來
+    difficulties = [m.split('/')[0].split('_')[1] for m in modes]
+
+    # 拼接結果
+    combined_name = f"{main_index}_{'_'.join(difficulties)}_{sub_index}"
+    return combined_name
 
 def identical_images(img1_path: str, img2_path: str) -> bool:
     img1 = cv2.imread(img1_path).astype(np.uint8)
@@ -57,41 +76,54 @@ if __name__ == "__main__":
     ]
 
     skipped_records = {}
+    print(MODES)
     for mode in MODES:
-        print(f"Processing mode: {mode}")
-        mode_output_path = f"{OUTPUT_PATH}/{mode}/overall/"
-        if not os.path.exists(mode_output_path):
-            os.makedirs(mode_output_path)
+        print("Processing Mode :", mode)
 
-        prev_img_path = None
-        skipped_indices = []  # 儲存這個 mode 被跳過的 frame index
+        skipped_indices = []
+        status = {i: "keep" for i in range(MAX_INDEX)}
 
-        with tqdm(range(0, MAX_INDEX)) as pbar:
-            pbar.set_description(f"Processing mode: {mode}")
-            dst_frame_count = 0
+        # 1: Check identical images and mark them as "drop"
+        for difficult in mode:
+            prev_img_path = None
+            with tqdm(range(MAX_INDEX)) as pbar:
+                pbar.set_description(f"Check Identical: {difficult}")
+                for frame_index in pbar:
+                    src = f"{IMG_FOLDER}/{difficult}/colorNoScreenUI_{frame_index}.png"
 
-            for frame_index in pbar:
-                for prefix, ext in TARGET_FILES:
-                    src = f"{IMG_FOLDER}/{mode}/{prefix}{frame_index}{ext}"
-                    dst = f"{mode_output_path}/{prefix}{frame_index}{ext}"
-
-                    # check if identical
-                    if prev_img_path is not None and src.endswith(".png"):
+                    if prev_img_path is not None:
                         if identical_images(src, prev_img_path):
                             print("[Skipped] Identical image detected, skipping copy:", src)
-                            skipped_indices.append(src)
-                            continue
-                    shutil.copyfile(src, dst)
+                            status[frame_index] = "drop"
 
-                    if src.endswith(".png"):
-                        prev_img_path = src
+                    prev_img_path = src
+
+        # 2: Copy files according to the status
+        for difficult in mode:
+            dst_frame_count = 0
+            with tqdm(range(MAX_INDEX)) as pbar:
+                pbar.set_description(f"Copying Files: {difficult}")
+                for frame_index in pbar:
+                    if status[frame_index] == "drop":
+                        skipped_indices.append(frame_index)
+                        continue
+                    else:
+                        for prefix, ext in TARGET_FILES:
+                            mode_output_path = f"{OUTPUT_PATH}/{difficult}/overall/"
+                            if not os.path.exists(mode_output_path):
+                                os.makedirs(mode_output_path)
+
+                            src = f"{IMG_FOLDER}/{difficult}/{prefix}{frame_index}{ext}"
+                            dst = f"{mode_output_path}/{prefix}{frame_index}_{dst_frame_count}{ext}"
+                            shutil.copyfile(src, dst)
                         dst_frame_count += 1
 
-            print(f"Total copied frames for mode {mode}: {dst_frame_count}")
-            skipped_records[mode] = {
-                "Total Available": dst_frame_count,  # 記錄當前 mode 的結果
-                "Skip Indices": skipped_indices  # 記錄當前 mode 的結果
-            }
+        mode_name = parse_mode_name(mode)
+        print(f"Total copied frames for mode {mode_name}: {dst_frame_count}")
+        skipped_records[mode_name] = {
+            "Total Available": dst_frame_count,  # 記錄當前 mode 的結果
+            "Skip Indices": skipped_indices  # 記錄當前 mode 的結果
+        }
         
     json_output_path = os.path.join(OUTPUT_PATH, "skipped_indices.json")
     with open(json_output_path, "w") as f:

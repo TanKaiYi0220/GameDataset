@@ -1,10 +1,14 @@
 import os
+os.environ["OPENCV_IO_ENABLE_OPENEXR"] = "1"
+
 import shutil
 import cv2
 from tqdm import tqdm
 from skimage.metrics import peak_signal_noise_ratio as psnr
 import numpy as np
 import json
+from src.EXR_loader import loadEXR
+from src.utils import save_img
 
 def get_all_modes(main_index_list, difficulty_list, sub_index, fps):
     modes = []
@@ -25,12 +29,13 @@ def parse_mode_name(modes):
     first = modes[0].split('/')
     main_index = first[0].split('_')[0]         # 例如 '0'
     sub_index = first[1].split('_')[-1]         # 例如 '0'
+    fps = first[2]
 
     # 把所有 mode 的第二個部分的難度名稱抓出來
     difficulties = [m.split('/')[0].split('_')[1] for m in modes]
 
     # 拼接結果
-    combined_name = f"{main_index}_{'_'.join(difficulties)}_{sub_index}"
+    combined_name = f"{main_index}_{'_'.join(difficulties)}_{sub_index}_{fps}"
     return combined_name
 
 def identical_images(img1_path: str, img2_path: str) -> bool:
@@ -38,7 +43,7 @@ def identical_images(img1_path: str, img2_path: str) -> bool:
     img2 = cv2.imread(img2_path).astype(np.uint8)
 
     # visualize different between two images
-    # color_diff = cv2.absdiff(img1, img2)
+    color_diff = cv2.absdiff(img1, img2)
     # cv2.imshow("Color Difference", color_diff)
     # cv2.waitKey(0)
     # cv2.destroyAllWindows()
@@ -54,16 +59,34 @@ def identical_images(img1_path: str, img2_path: str) -> bool:
     
     return False
 
+    
+def EXRToPNG(filepath: str, imgPath: str):
+    exrImg = loadEXR(filepath)
+    exrImg = exrImg * 255.0
+    exrImg = exrImg.astype(np.uint8)  # Fixed: assign the conversion
+
+    save_img(imgPath, exrImg)
+
+def check_png_exists(png_path: str):
+    if os.path.exists(png_path):
+        return
+    
+    # replaced path extension from .png to .exr
+    name, _ = os.path.splitext(png_path)
+    exr_path = f"{name}.exr"
+    EXRToPNG(exr_path, png_path)
+
+
 if __name__ == "__main__":
     ROOT_PATH = "/datasets/VFI/datasets/AnimeFantasyRPG/"
-    RECORD_NAME = "AnimeFantasyRPG_3_60"
-    FPS = "fps_60"
+    RECORD_NAME = "AnimeFantasyRPG_2_60"
+    FPS = "fps_30"
+    # MAIN_INDEX = ["0", "1", "2", "3", "4"]
     MAIN_INDEX = ["0", "1", "2", "3", "4"]
-    MAIN_INDEX = ["0", "4"]
     DIFFICULTY = ["Easy", "Medium"]
-    SUB_INDEX = "0"
+    SUB_INDEX = "1"
     MODES = get_all_modes(MAIN_INDEX, DIFFICULTY, SUB_INDEX, FPS)
-    MAX_INDEX = 800
+    MAX_INDEX = 400
     print(MODES)
         
     IMG_FOLDER = f"{ROOT_PATH}/{RECORD_NAME}"
@@ -90,6 +113,9 @@ if __name__ == "__main__":
                 pbar.set_description(f"Check Identical: {difficult}")
                 for frame_index in pbar:
                     src = f"{IMG_FOLDER}/{difficult}/colorNoScreenUI_{frame_index}.png"
+
+                    check_png_exists(src)
+                    
 
                     if prev_img_path is not None:
                         if identical_images(src, prev_img_path):
@@ -125,6 +151,6 @@ if __name__ == "__main__":
             "Skip Indices": skipped_indices  # 記錄當前 mode 的結果
         }
         
-    json_output_path = os.path.join(OUTPUT_PATH, "skipped_indices.json")
+    json_output_path = os.path.join(OUTPUT_PATH, f"skipped_indices_{FPS}.json")
     with open(json_output_path, "w") as f:
         json.dump(skipped_records, f, indent=4)

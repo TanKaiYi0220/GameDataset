@@ -21,12 +21,13 @@ def parse_mode_name(modes):
     first = modes[0].split('/')
     main_index = first[0].split('_')[0]         # 例如 '0'
     sub_index = first[1].split('_')[-1]         # 例如 '0'
+    fps = first[2]
 
     # 把所有 mode 的第二個部分的難度名稱抓出來
     difficulties = [m.split('/')[0].split('_')[1] for m in modes]
 
     # 拼接結果
-    combined_name = f"{main_index}_{'_'.join(difficulties)}_{sub_index}"
+    combined_name = f"{main_index}_{'_'.join(difficulties)}_{sub_index}_{fps}"
     return combined_name
 
 def save_json(image_paths, status, i, json_path="review_result.json"):
@@ -123,11 +124,11 @@ def review_images(image_paths, json_path="review_result.json"):
 
 if __name__ == "__main__":
     ROOT_PATH = "/datasets/VFI/datasets/AnimeFantasyRPG/"
-    RECORD_NAME = "AnimeFantasyRPG_3_60"
+    RECORD_NAME = "AnimeFantasyRPG_2_60"
     FPS = "fps_60"
     MAIN_INDEX = "0"
     DIFFICULTY = ["Easy", "Medium"]
-    SUB_INDEX = "0"
+    SUB_INDEX = "1"
     MODES = get_all_modes([MAIN_INDEX], DIFFICULTY, SUB_INDEX, FPS)
     MAX_INDEX = 800
         
@@ -135,7 +136,7 @@ if __name__ == "__main__":
 
     CLEAN_PATH = f"/datasets/VFI/GFI_datasets/{RECORD_NAME}"
 
-    skip_indices = json.load(open(f"{CLEAN_PATH}/skipped_indices.json", "r"))
+    skip_indices = json.load(open(f"{CLEAN_PATH}/skipped_indices_{FPS}.json", "r"))
 
     image_paths = []
 
@@ -143,6 +144,7 @@ if __name__ == "__main__":
 
     mode = MODES[0][-1] # only check the last difficult level (e.g., Medium, including most objects)
     mode_name = parse_mode_name(MODES[0])
+    print(mode_name)
 
     image_paths = os.listdir(f"{CLEAN_PATH}/{mode}/overall/")
     image_paths = [f"{CLEAN_PATH}/{mode}/overall/{f}" for f in image_paths if f.endswith(".png")]

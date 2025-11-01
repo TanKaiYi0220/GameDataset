@@ -22,12 +22,13 @@ def parse_mode_name(modes):
     first = modes[0].split('/')
     main_index = first[0].split('_')[0]         # 例如 '0'
     sub_index = first[1].split('_')[-1]         # 例如 '0'
+    fps = first[2]
 
     # 把所有 mode 的第二個部分的難度名稱抓出來
     difficulties = [m.split('/')[0].split('_')[1] for m in modes]
 
     # 拼接結果
-    combined_name = f"{main_index}_{'_'.join(difficulties)}_{sub_index}"
+    combined_name = f"{main_index}_{'_'.join(difficulties)}_{sub_index}_{fps}"
     return combined_name
 
 def get_prefix_key(path):
@@ -82,11 +83,12 @@ def write_clip(paths, out_path, fps=1):
 
 if __name__ == "__main__":
     ROOT_PATH = "/datasets/VFI/datasets/AnimeFantasyRPG/"
-    RECORD_NAME = "AnimeFantasyRPG_3_60"
-    FPS = "fps_60"
-    MAIN_INDEX = ["0", "4"]
+    RECORD_NAME = "AnimeFantasyRPG_2_60"
+    ORIGINAL_FPS = 60
+    FPS = f"fps_{ORIGINAL_FPS}"
+    MAIN_INDEX = ["0", "1", "2", "3", "4"]
     DIFFICULTY = ["Easy", "Medium"]
-    SUB_INDEX = "0"
+    SUB_INDEX = "1"
     MODES = get_all_modes(MAIN_INDEX, DIFFICULTY, SUB_INDEX, FPS)
     MAX_INDEX = 800
         
@@ -94,9 +96,9 @@ if __name__ == "__main__":
 
     CLEAN_PATH = f"/datasets/VFI/GFI_datasets/{RECORD_NAME}"
 
-    CLIP_LEN = 120
+    CLIP_LEN = ORIGINAL_FPS * 2
 
-    TARGET_FPS = [1, 15]
+    TARGET_FPS = [1, 15, ORIGINAL_FPS]
 
     overall_clip_json = {}
 
@@ -146,7 +148,7 @@ if __name__ == "__main__":
                 total += 1
                 pos += CLIP_LEN
 
-    with open(f"{CLEAN_PATH}/overall_clip_info.json", "w", encoding="utf-8") as f:
+    with open(f"{CLEAN_PATH}/overall_{FPS}_clip_info.json", "w", encoding="utf-8") as f:
         json.dump(overall_clip_json, f, indent=4)
 
 

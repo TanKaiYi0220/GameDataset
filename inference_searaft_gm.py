@@ -26,6 +26,7 @@ from models.SEARAFT.core.utils.utils import load_ckpt
 
 from tqdm import tqdm
 from skimage.metrics import peak_signal_noise_ratio as psnr
+import matplotlib.pyplot as plt
 
 def create_color_bar(height, width, color_map):
     """
@@ -85,22 +86,83 @@ def get_heatmap(info, args):
     heatmap = (log_b * weight).sum(dim=1, keepdim=True)
     return heatmap
 
-def vis_flow_diff(name, src_image, flow1, flow2):
-    flow_diff = torch.norm(flow1 - flow2, dim=1)
-    flow_diff = flow_diff[0].cpu().numpy()
-    flow_diff = (flow_diff - flow_diff.min()) / (flow_diff.max() - flow_diff.min())
-    flow_diff = (flow_diff * 255).astype(np.uint8)
-    colored_flow_diff = cv2.applyColorMap(flow_diff, cv2.COLORMAP_JET)
-    save_img(name, colored_flow_diff)
+def create_color_bar_with_labels(
+    colormap=cv2.COLORMAP_JET, vmin=0.0, vmax=1.0,
+    width=40, height=400, n_ticks=6, font_scale=0.5, thickness=1
+):
+    # 1) 建立垂直色條 (top=vmax, bottom=vmin)
+    grad = np.linspace(1, 0, height, dtype=np.float32).reshape(height, 1)
+    grad = np.repeat(grad, width, axis=1)
+    # 用 matplotlib 產生 RGB，再轉 BGR
+    cmap = plt.get_cmap('jet')
+    bar_rgb = (cmap(grad)[:, :, :3] * 255).astype(np.uint8)
+    bar = cv2.cvtColor(bar_rgb, cv2.COLOR_RGB2BGR)
 
+    # 2) 先算所有 label 的最大寬度 → 動態留白
+    tick_vals = np.linspace(vmax, vmin, n_ticks)
+    labels = [f"{v:.2f}" for v in tick_vals]
+    max_w = 0; max_h = 0; max_base = 0
+    for s in labels:
+        (tw, th), base = cv2.getTextSize(s, cv2.FONT_HERSHEY_SIMPLEX, font_scale, thickness)
+        max_w = max(max_w, tw)
+        max_h = max(max_h, th)
+        max_base = max(max_base, base)
+
+    pad_left = 6                  # 色條右側到刻度線間距
+    tick_len = 6                  # 刻度線長度
+    pad_right = max_w + 8         # 文字到右邊界留白
+    pad = pad_left + tick_len + pad_right
+
+    # 3) 擴寬畫布，並畫上刻度＆文字（白字黑邊，避免淹沒）
+    canvas = np.zeros((height, width + pad, 3), dtype=np.uint8)
+    canvas[:, :width] = bar
+
+    for i, (val, lab) in enumerate(zip(tick_vals, labels)):
+        y = int(round(i * (height - 1) / (n_ticks - 1)))
+
+        # 小刻度線
+        x0 = width + pad_left
+        cv2.line(canvas, (x0, y), (x0 + tick_len, y), (255, 255, 255), 1, cv2.LINE_AA)
+
+        # 文字位置（夾在安全範圍內，避免出上下邊）
+        (tw, th), base = cv2.getTextSize(lab, cv2.FONT_HERSHEY_SIMPLEX, font_scale, thickness)
+        y_text = np.clip(y + th // 2, th + 2, height - 2)  # baseline 安全
+        x_text = x0 + tick_len + 4
+
+        # 先黑邊再白字
+        cv2.putText(canvas, lab, (x_text, y_text),
+                    cv2.FONT_HERSHEY_SIMPLEX, font_scale, (0, 0, 0), thickness+2, cv2.LINE_AA)
+        cv2.putText(canvas, lab, (x_text, y_text),
+                    cv2.FONT_HERSHEY_SIMPLEX, font_scale, (255, 255, 255), thickness, cv2.LINE_AA)
+
+    return canvas
+
+def vis_flow_diff(name, src_image, flow1, flow2):
+    # --- Compute flow difference ---
+    flow_diff = torch.norm(flow1 - flow2, dim=1)
+    flow_diff_np = flow_diff[0].detach().cpu().numpy()
+
+    # --- Compute actual EPE range ---
+    epe_min = float(flow_diff_np.min())
+    epe_max = float(flow_diff_np.max())
+
+    # --- Normalize for visualization ---
+    norm_flow_diff = (flow_diff_np - epe_min) / (epe_max - epe_min + 1e-8)
+    norm_flow_diff = (norm_flow_diff * 255).astype(np.uint8)
+
+    # --- Apply colormap ---
+    colored_flow_diff = cv2.applyColorMap(norm_flow_diff, cv2.COLORMAP_JET)
+
+    # --- Overlay with source image ---
     overlay = src_image * 0.3 + colored_flow_diff * 0.7
-    # Create a color bar
-    height, width = src_image.shape[:2]
-    color_bar = create_color_bar(50, width, cv2.COLORMAP_JET)  # Adjust the height and colormap as needed
-    # Add the color bar to the image
     overlay = overlay.astype(np.uint8)
-    combined_image = add_color_bar_to_image(overlay, color_bar, 'vertical')
-    save_img(name, cv2.cvtColor(combined_image, cv2.COLOR_RGB2BGR))
+
+    # --- Draw colorbar with actual EPE range ---
+    color_bar = create_color_bar_with_labels(cv2.COLORMAP_JET, epe_min, epe_max, width=30, height=overlay.shape[0])
+
+    # --- Combine ---
+    combined_image = np.hstack((overlay, color_bar))
+    cv2.imwrite(name, cv2.cvtColor(combined_image, cv2.COLOR_RGB2BGR))
 
 def forward_flow(args, model, image1, image2, game_motion_flow=None):
     output = model(image1, image2, iters=args.iters, test_mode=True, game_motion_flow=game_motion_flow)
@@ -376,11 +438,11 @@ def main():
     backward_warping_module = BackwardWarpingNearest()
 
     # template for loading FRPG images
-    record_name = "AnimeFantasyRPG_3_60"
+    record_name = "AnimeFantasyRPG_2_60"
     dataset_root_path = f"/datasets/VFI/datasets/AnimeFantasyRPG/{record_name}/"
     dataset_mode_path = [
-        "0_Easy/0_Easy_0/fps_30/", 
-        "0_Medium/0_Medium_0/fps_30/", 
+        # "0_Easy/0_Easy_0/fps_30/", 
+        # "0_Medium/0_Medium_0/fps_30/", 
         # "0_Difficult/0_Difficult_0/fps_30/",
 
         # "0_Easy/0_Easy_0/fps_60/", 
@@ -395,20 +457,20 @@ def main():
         # "4_Medium/4_Medium_0/fps_60/", 
         # "4_Difficult/4_Difficult_0/fps_60/", 
 
-        # "0_Easy/0_Easy_1/fps_30/", 
-        # "0_Medium/0_Medium_1/fps_30/", 
+        "0_Easy/0_Easy_1/fps_30/", 
+        "0_Medium/0_Medium_1/fps_30/", 
         # "0_Difficult/0_Difficult_0/fps_30/",
 
-        # "0_Easy/0_Easy_1/fps_60/", 
-        # "0_Medium/0_Medium_1/fps_60/", 
+        "0_Easy/0_Easy_1/fps_60/", 
+        "0_Medium/0_Medium_1/fps_60/", 
         # "0_Difficult/0_Difficult_0/fps_60/",
 
-        # "4_Easy/4_Easy_1/fps_30/", 
-        # "4_Medium/4_Medium_1/fps_30/",
+        "4_Easy/4_Easy_1/fps_30/", 
+        "4_Medium/4_Medium_1/fps_30/",
         # "4_Difficult/4_Difficult_0/fps_30/", 
 
-        # "4_Easy/4_Easy_1/fps_60/", 
-        # "4_Medium/4_Medium_1/fps_60/", 
+        "4_Easy/4_Easy_1/fps_60/", 
+        "4_Medium/4_Medium_1/fps_60/", 
         # "4_Difficult/4_Difficult_0/fps_60/", 
     ]
 

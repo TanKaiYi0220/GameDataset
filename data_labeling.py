@@ -124,11 +124,11 @@ def review_images(image_paths, json_path="review_result.json"):
 
 if __name__ == "__main__":
     ROOT_PATH = "/datasets/VFI/datasets/AnimeFantasyRPG/"
-    RECORD_NAME = "AnimeFantasyRPG_2_60"
-    FPS = "fps_60"
+    RECORD_NAME = "AnimeFantasyRPG_3_60"
+    FPS = "fps_30"
     MAIN_INDEX = "0"
     DIFFICULTY = ["Easy", "Medium"]
-    SUB_INDEX = "1"
+    SUB_INDEX = "0"
     MODES = get_all_modes([MAIN_INDEX], DIFFICULTY, SUB_INDEX, FPS)
     MAX_INDEX = 800
         
@@ -136,7 +136,7 @@ if __name__ == "__main__":
 
     CLEAN_PATH = f"/datasets/VFI/GFI_datasets/{RECORD_NAME}"
 
-    skip_indices = json.load(open(f"{CLEAN_PATH}/skipped_indices_{FPS}.json", "r"))
+    skip_indices = json.load(open(f"{CLEAN_PATH}/skipped_indices.json", "r"))
 
     image_paths = []
 

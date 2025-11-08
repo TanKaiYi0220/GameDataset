@@ -51,13 +51,22 @@ def get_diff(epe_scores_overall_df, mode_1, mode_2, output_root_path, record_nam
     diff_df.to_csv(f"{output_root_path}/epe_scores_diff.csv")
 
 def main():
-    record_name = "AnimeFantasyRPG_2_60"
-    fps = "fps_60"
+    record_name = "AnimeFantasyRPG_3_60_clip/AnimeFantasyRPG_3_60"
+    fps = "fps_30"
     output_root_path = f"./output/SEARAFT/AnimeFantasyRPG/{record_name}/"
     dataset_mode_path = [
         ## AnimeFantasyRPG_3_60
-        # f"0_Easy/0_Easy_0/{fps}/", 
-        # f"0_Medium/0_Medium_0/{fps}/", 
+        f"0_Easy/0_Easy_0/{fps}/", 
+        f"0_Medium/0_Medium_0/{fps}/", 
+
+        # f"1_Easy/1_Easy_0/{fps}/", 
+        # f"1_Medium/1_Medium_0/{fps}/", 
+
+        # f"2_Easy/2_Easy_0/{fps}/", 
+        # f"2_Medium/2_Medium_0/{fps}/", 
+
+        # f"3_Easy/3_Easy_0/{fps}/", 
+        # f"3_Medium/3_Medium_0/{fps}/", 
 
         # f"4_Easy/4_Easy_0/{fps}/", 
         # f"4_Medium/4_Medium_0/{fps}/",
@@ -66,8 +75,8 @@ def main():
         # f"0_Easy/0_Easy_1/{fps}/", 
         # f"0_Medium/0_Medium_1/{fps}/",
 
-        f"4_Easy/4_Easy_1/{fps}/", 
-        f"4_Medium/4_Medium_1/{fps}/",
+        # f"4_Easy/4_Easy_1/{fps}/", 
+        # f"4_Medium/4_Medium_1/{fps}/",
     ]
 
     comparison_name = f"{mode_rename(dataset_mode_path[0])}_vs_{mode_rename(dataset_mode_path[1])}"
@@ -84,7 +93,7 @@ def main():
             data = json.load(f)
             all_results = data["epe_results"]["all"]
             epe_scores_df = pd.DataFrame()
-            epe_scores_df["FrameIndex"] = [item["index"] for item in all_results]
+            epe_scores_df["FrameIndex"] = [idx for idx, _ in enumerate(all_results)]
             epe_scores_df["Score"] = [item["score"] for item in all_results]
             epe_scores_df["Mode"] = mode_rename(mode)
 

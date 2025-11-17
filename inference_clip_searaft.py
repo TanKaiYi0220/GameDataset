@@ -392,7 +392,7 @@ def main():
 
     ROOT_PATH = "/datasets/VFI/datasets/AnimeFantasyRPG/"
     RECORD_NAME = ["AnimeFantasyRPG_3_60"]
-    FPS = "fps_30"
+    FPS = "fps_60"
     MAIN_INDEX = ["0", "1", "2", "3"]
     DIFFICULTY = ["Easy", "Medium"]
     SUB_INDEX = "0"

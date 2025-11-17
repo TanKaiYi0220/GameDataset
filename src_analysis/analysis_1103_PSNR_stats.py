@@ -110,7 +110,10 @@ if __name__ == "__main__":
             print(difficult_df.head())
 
             index = difficult_df.index - difficult_df.index[0]
+            print(index)
+            print(len(data[0]))
 
+            plt.figure(figsize=(8, 6))
             for d, l in zip(data, labels):
                 plt.plot(index, d, label=l)
 

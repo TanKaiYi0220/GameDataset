@@ -14,8 +14,8 @@ import sys
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from src.utils import read_npy, flow_to_image, save_img
-from src.gameData_loader import load_backward_velocity
-from src.warp_module import BackwardWarpingNearest
+from src.gameData_loader import load_backward_velocity, load_forward_velocity
+from src.warp_module import ForwardWarpingNearest, BackwardWarpingNearest, ForwardWarpingNearestWithDepth, OcclusionMotionVector
 
 def get_all_modes(main_index_list, difficulty_list, sub_index, fps):
     modes = []
@@ -45,7 +45,7 @@ def parse_mode_name(modes):
     combined_name = f"{main_index}_{'_'.join(difficulties)}_{sub_index}_{fps}"
     return combined_name
 
-def extract_previous_index(root_dir_path: str, path: str) -> str:
+def extract_previous_index(path: str) -> str:
     """
     將完整路徑轉成簡短檔名，如：
     /path/.../colorNoScreenUI_246_241.png → colorNoScreenUI_246.png
@@ -55,9 +55,9 @@ def extract_previous_index(root_dir_path: str, path: str) -> str:
 
     # 以 '_' 拆分，保留前兩段 (文字 + 第一個數字)
     parts = name.split('_')
-    previous_path = f"{'_'.join(parts[:2])}{ext}"
+    prevs_index = parts[-2]
 
-    return os.path.join(root_dir_path, previous_path)
+    return prevs_index
 
 def vis_color_diff(img1, img2):
     diff = img1 - img2
@@ -232,15 +232,19 @@ def diff_threshold_mask(img1, img2, threshold=0.1):
 
     return gray_to_rgb(mask)
 
-def warping(warping_module, src_image, flow):
+def warping(warping_module, src_image, flow, depth=None):
     # demo warping function
     src_image_torch = torch.from_numpy(src_image).permute(2, 0, 1).unsqueeze(0).float().cuda()
-    warping_module.warp(src_image_torch, flow)
+    if depth == None:
+        warping_module.warp(src_image_torch, flow)
+    else:
+        warping_module.warp(src_image_torch, flow, depth)
     warped_img, _ = warping_module.get_warping_result(mode="average")
 
     warped_img = warped_img.cpu().numpy()[0].transpose(1, 2, 0).astype(np.uint8)
 
     return warped_img
+
 
 if __name__ == "__main__":
     ROOT_PATH = "/datasets/VFI/datasets/AnimeFantasyRPG/"
@@ -261,6 +265,8 @@ if __name__ == "__main__":
 
     
     backward_warping_module = BackwardWarpingNearest()
+    forward_warping_module = ForwardWarpingNearestWithDepth()
+    omv_module = OcclusionMotionVector()
 
     dataset_root_path = f"{CLEAN_ROOT_PATH}/{RECORD_NAME}/"
     print("Dataset Root Path:", dataset_root_path)
@@ -285,42 +291,48 @@ if __name__ == "__main__":
 
         with tqdm(range(len(clip_color_seq))) as pbar:
             for i in pbar:
-                difficult_gt_frame_path = extract_previous_index(DIFFICULT_DIR_PATH, clip_color_seq[i + 1])
-                difficult_src_frame_path = extract_previous_index(DIFFICULT_DIR_PATH, clip_color_seq[i])
+                original_img1_index = extract_previous_index(clip_color_seq[i])
+                original_img2_index = extract_previous_index(clip_color_seq[i + 1])
+
+                print(original_img1_index)
+
+                difficult_img1_path = os.path.join(DIFFICULT_DIR_PATH, f"colorNoScreenUI_{original_img1_index}.png")
+                difficult_img2_path = os.path.join(DIFFICULT_DIR_PATH, f"colorNoScreenUI_{original_img2_index}.png")
+
+                fmv_path = os.path.join(DIFFICULT_DIR_PATH, f"forwardVel_Depth_{original_img1_index}.exr")
 
                 bmv, depth = load_backward_velocity(clip_velD_seq[i + 1])
+                fmv, depth = load_forward_velocity(fmv_path)
+                omv, _ = omv_module.compute(fmv, bmv)
 
-                img_target = cv2.imread(difficult_gt_frame_path)
-                img_src = cv2.imread(difficult_src_frame_path)
+
+                print(bmv.shape)
+                print(fmv.shape)
+                print("OMV: ", omv.shape)
+
+                img_src = cv2.imread(difficult_img1_path)
+                img_target = cv2.imread(difficult_img2_path)
+
+                warped_img_bmv = warping(backward_warping_module, img_src, bmv, None)
+                warped_img_fmv = warping(forward_warping_module, img_src, fmv, depth)
+
                 
-                warped_img_bw_motion = warping(backward_warping_module, img_src, bmv)
+                warped_img_omv = warping(backward_warping_module, img_src, omv, None)
+                omv = omv[0].permute(1, 2, 0).cpu().numpy()
+                fmv = fmv[0].permute(1, 2, 0).cpu().numpy()
+                bmv = bmv[0].permute(1, 2, 0).cpu().numpy()
 
+                
                 show_images_switchable(
                     [
-                        img_target, warped_img_bw_motion, 
-                        min_neighborhood_error_np_threshold(img_target, warped_img_bw_motion, error_fn=mae_np, threshold=0.0, kernel_size=1),
-                        min_neighborhood_error_np_threshold(img_target, warped_img_bw_motion, error_fn=smape_np, threshold=0.0, kernel_size=1),
-                        min_neighborhood_error_np_threshold(img_target, warped_img_bw_motion, error_fn=smape_np, threshold=0.0),
-                        min_neighborhood_error_np_threshold(img_target, warped_img_bw_motion, error_fn=mae_np, threshold=0.0),
-
-                        img_src, img_target, 
-                        min_neighborhood_error_np_threshold(img_src, img_target, error_fn=mae_np, threshold=0.0, kernel_size=1),
-                        min_neighborhood_error_np_threshold(img_src, img_target, error_fn=smape_np, threshold=0.0, kernel_size=1),
-                        min_neighborhood_error_np_threshold(img_src, img_target, error_fn=smape_np, threshold=0.0),
-                        min_neighborhood_error_np_threshold(img_src, img_target, error_fn=mae_np, threshold=0.0),
+                        img_target, warped_img_bmv, flow_to_image(bmv), img_target,
+                        img_target, warped_img_fmv, flow_to_image(fmv), img_src,
+                        flow_to_image(bmv), flow_to_image(omv), warped_img_bmv, warped_img_omv, 
                     ],
                     [
-                        "Target", "Warped Image", 
-                        "MAE Mask", 
-                        "SMAPE Mask",
-                        "SMAPE Mask with 3x3 kernel",
-                        "MAE Mask with 3x3 kernel", 
-
-                        "Source", "Target",
-                        "MAE Mask", 
-                        "SMAPE Mask",
-                        "SMAPE Mask with 3x3 kernel",
-                        "MAE Mask with 3x3 kernel", 
+                        "image 2", "warped image 2", "bmv", "image 2",
+                        "image 2", "warped image 2", "fmv", "image 1",
+                         "bmv", "omv", "warped image 2 (bmv)", "warped image 2 (omv)",
                     ]
                 )
 

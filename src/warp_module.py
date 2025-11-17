@@ -216,3 +216,70 @@ class ForwardWarpingNearestWithDepth(WarpingBase):
         self.out = out
         self.hit = hit
         return out, hit
+    
+class OcclusionMotionVector(WarpingBase):
+    """
+    重構版：依序做
+      1. backward (取得 y 與 hit_y)
+      2. forward (取得 z 與 hit_z)
+      3. 計算 OMV: x^O_{t1} = y + (z - x_t2)
+    """
+
+    @torch.no_grad()
+    def compute(self,
+                flow_t1_to_t2: torch.Tensor,  # forward
+                flow_t2_to_t1: torch.Tensor):  # backward
+        N, _, H, W = flow_t1_to_t2.shape
+        device = flow_t1_to_t2.device
+
+        # =========================
+        # Backward: t2→t1，取得 y 和 hit_y
+        # =========================
+        u2, v2 = self._make_uv_grid(N, H, W, device)  # grid of t2
+        y_x = u2 + flow_t2_to_t1[:, 0]
+        y_y = v2 + flow_t2_to_t1[:, 1]
+        y_map = torch.stack((y_x, y_y), dim=1)  # [N,2,H,W]
+
+        # hit_y: 合法範圍內 (非越界)
+        hit_y = ((y_x >= 0) & (y_x < W) & (y_y >= 0) & (y_y < H)).float()[:, None, :, :]
+
+        # =========================
+        # Forward: 將 y 再通過 flow_t1_to_t2 投影成 z
+        # =========================
+        # 先在 t1 網格中建立座標（與 flow_t1_to_t2 對應）
+        u1, v1 = self._make_uv_grid(N, H, W, device)
+
+        # 將 flow_t1_to_t2 warp 到 y_map 的位置（雙線性取樣）
+        gx = 2.0 * (y_x / (W - 1)) - 1.0
+        gy = 2.0 * (y_y / (H - 1)) - 1.0
+        grid_y = torch.stack((gx, gy), dim=-1)  # [N,H,W,2]
+
+        flow_at_y = F.grid_sample(
+            flow_t1_to_t2, grid_y,
+            mode="bilinear", padding_mode="zeros", align_corners=True
+        )  # [N,2,H,W]
+
+        z_map = y_map + flow_at_y  # [N,2,H,W]
+
+        # hit_z: 合法範圍內 (非越界)
+        z_x, z_y = z_map[:, 0], z_map[:, 1]
+        hit_z = ((z_x >= 0) & (z_x < W) & (z_y >= 0) & (z_y < H)).float()[:, None, :, :]
+
+        # =========================
+        # OMV 計算
+        # =========================
+        # OMV = (y + (z - x2)) - x2 = y + z - 2*x2
+        x2 = torch.stack((u2, v2), dim=1)
+        omv = y_map + (z_map - x2) - x2  # [N,2,H,W]
+
+        # =========================
+        # 輸出與 debug
+        # =========================
+        self.y_map = y_map
+        self.z_map = z_map
+        self.hit_y = hit_y
+        self.hit_z = hit_z
+
+        self.out = omv
+        self.hit = (hit_y * hit_z)  # 同時合法才視為有效
+        return omv, self.hit

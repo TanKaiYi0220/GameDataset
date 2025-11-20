@@ -104,7 +104,7 @@ def smape_np(a, b, eps=1e-6):
 
 def mape_np(a: np.ndarray, b: np.ndarray, eps: float = 1e-6) -> np.ndarray:
     """Element-wise MAPE = |a-b| / (|b| + eps)."""
-    return np.abs(a - b) / (np.abs(b) + eps)
+    return np.abs(a - b) / (np.abs(a) + np.abs(a) + eps)
 
 def mae_np(a: np.ndarray, b: np.ndarray) -> np.ndarray:
     """Element-wise MAE = |a-b|."""
@@ -300,27 +300,35 @@ if __name__ == "__main__":
                         img_target, warped_img_bw_motion, 
                         min_neighborhood_error_np_threshold(img_target, warped_img_bw_motion, error_fn=mae_np, threshold=0.0, kernel_size=1),
                         min_neighborhood_error_np_threshold(img_target, warped_img_bw_motion, error_fn=smape_np, threshold=0.0, kernel_size=1),
-                        min_neighborhood_error_np_threshold(img_target, warped_img_bw_motion, error_fn=smape_np, threshold=0.0),
+                        min_neighborhood_error_np_threshold(img_target, warped_img_bw_motion, error_fn=mape_np, threshold=0.0, kernel_size=1),
                         min_neighborhood_error_np_threshold(img_target, warped_img_bw_motion, error_fn=mae_np, threshold=0.0),
+                        min_neighborhood_error_np_threshold(img_target, warped_img_bw_motion, error_fn=smape_np, threshold=0.0),
+                        min_neighborhood_error_np_threshold(img_target, warped_img_bw_motion, error_fn=mape_np, threshold=0.0),
 
                         img_src, img_target, 
                         min_neighborhood_error_np_threshold(img_src, img_target, error_fn=mae_np, threshold=0.0, kernel_size=1),
                         min_neighborhood_error_np_threshold(img_src, img_target, error_fn=smape_np, threshold=0.0, kernel_size=1),
-                        min_neighborhood_error_np_threshold(img_src, img_target, error_fn=smape_np, threshold=0.0),
+                        min_neighborhood_error_np_threshold(img_src, img_target, error_fn=mape_np, threshold=0.0, kernel_size=1),
                         min_neighborhood_error_np_threshold(img_src, img_target, error_fn=mae_np, threshold=0.0),
+                        min_neighborhood_error_np_threshold(img_src, img_target, error_fn=smape_np, threshold=0.0),
+                        min_neighborhood_error_np_threshold(img_src, img_target, error_fn=mape_np, threshold=0.0),
                     ],
                     [
                         "Target", "Warped Image", 
                         "MAE Mask", 
                         "SMAPE Mask",
-                        "SMAPE Mask with 3x3 kernel",
+                        "MAPE Mask",
                         "MAE Mask with 3x3 kernel", 
+                        "SMAPE Mask with 3x3 kernel",
+                        "MAPE Mask with 3x3 kernel",
 
                         "Source", "Target",
                         "MAE Mask", 
                         "SMAPE Mask",
-                        "SMAPE Mask with 3x3 kernel",
+                        "MAPE Mask",
                         "MAE Mask with 3x3 kernel", 
+                        "SMAPE Mask with 3x3 kernel",
+                        "MAPE Mask with 3x3 kernel",
                     ]
                 )
 

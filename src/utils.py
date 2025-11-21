@@ -227,3 +227,35 @@ def flow_to_image(flow_uv, clip_flow=None, convert_to_bgr=False):
     u = u / (rad_max + epsilon)
     v = v / (rad_max + epsilon)
     return flow_uv_to_colors(u, v, convert_to_bgr)
+
+def show_images_switchable(images, titles):
+    """
+    images: list[np.ndarray]   要顯示的圖片
+    titles: list[str]          每張圖的標題
+    """
+    assert len(images) == len(titles)
+    idx = 0
+    n = len(images)
+
+    while True:
+        img = images[idx].copy()
+
+        # 顯示標題 (目前第幾張)
+        text = f"[{idx+1}/{n}] {titles[idx]}"
+        cv2.putText(img, text, (20, 40),
+                    cv2.FONT_HERSHEY_SIMPLEX, 1.0, (0, 0, 255), 2, cv2.LINE_AA)
+
+        cv2.imshow("Overlay", img)
+        key = cv2.waitKey(0) & 0xFF
+
+        # ← 或 ↑：上一張
+        if key in [ord('a'), 81, 82]:  # 'a' 或 左/上箭頭
+            idx = (idx - 1) % n
+        # → 或 ↓：下一張
+        elif key in [ord('d'), 83, 84]:  # 'd' 或 右/下箭頭
+            idx = (idx + 1) % n
+        # q 或 ESC 離開
+        elif key in [ord('q'), 27]:
+            break
+
+    cv2.destroyAllWindows()

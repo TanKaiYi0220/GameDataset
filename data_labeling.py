@@ -61,7 +61,11 @@ def read_saved_status(json_path="review_result.json"):
     for path in data.get("rejected_list", []):
         index = int(os.path.basename(path).split("_")[-1].split(".")[0])
         status[index] = "drop"
+
     return status
+
+def get_idx(path):
+    return int(os.path.basename(path).split("_")[-1].split(".")[0])
 
 def review_images(image_paths, json_path="review_result.json"):
     """
@@ -88,15 +92,16 @@ def review_images(image_paths, json_path="review_result.json"):
             continue
 
         # 根據標記顯示不同顏色邊框
-        if status[i] == "keep":
+        status_idx = get_idx(image_paths[i])
+        if status[status_idx] == "keep":
             color = (0, 255, 0)
-        elif status[i] == "drop":
+        elif status[status_idx] == "drop":
             color = (0, 0, 255)
         else:
             color = (128, 128, 128)
 
         cv2.rectangle(img, (5, 5), (img.shape[1] - 5, img.shape[0] - 5), color, 3)
-        text = f"[{i+1}/{len(image_paths)}] {os.path.basename(image_paths[i])} | Status: {status[i]}"
+        text = f"[{i+1}/{len(image_paths)}] {os.path.basename(image_paths[i])} | Status: {status[status_idx]}"
         cv2.putText(img, text, (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, color, 2)
         cv2.imshow(win, img)
 
@@ -106,10 +111,10 @@ def review_images(image_paths, json_path="review_result.json"):
         elif key in (ord('a'), 80, 84):  # ← ↑
             i = max(i - 1, 0)
         elif key in (ord('y'), ord('Y')):
-            status[i] = "keep"
+            status[status_idx] = "keep"
             i = min(i + 1, len(image_paths) - 1)
         elif key in (ord('n'), ord('N')):
-            status[i] = "drop"
+            status[status_idx] = "drop"
             i = min(i + 1, len(image_paths) - 1)
         elif key in (ord('s'), ord('S')):
             save_json(image_paths, status, i, json_path)
@@ -125,7 +130,7 @@ def review_images(image_paths, json_path="review_result.json"):
 if __name__ == "__main__":
     ROOT_PATH = "/datasets/VFI/datasets/AnimeFantasyRPG/"
     RECORD_NAME = "AnimeFantasyRPG_3_60"
-    FPS = "fps_30"
+    FPS = "fps_60"
     MAIN_INDEX = "0"
     DIFFICULTY = ["Easy", "Medium"]
     SUB_INDEX = "0"
@@ -136,7 +141,7 @@ if __name__ == "__main__":
 
     CLEAN_PATH = f"/datasets/VFI/GFI_datasets/{RECORD_NAME}"
 
-    skip_indices = json.load(open(f"{CLEAN_PATH}/skipped_indices.json", "r"))
+    skip_indices = json.load(open(f"{CLEAN_PATH}/skipped_indices_{FPS}.json", "r"))
 
     image_paths = []
 

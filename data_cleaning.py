@@ -79,12 +79,12 @@ def check_png_exists(png_path: str):
 
 if __name__ == "__main__":
     ROOT_PATH = "/datasets/VFI/datasets/AnimeFantasyRPG/"
-    RECORD_NAME = "AnimeFantasyRPG_2_60"
+    RECORD_NAME = "AnimeFantasyRPG_3_60"
     FPS = "fps_30"
     # MAIN_INDEX = ["0", "1", "2", "3", "4"]
     MAIN_INDEX = ["0", "1", "2", "3", "4"]
     DIFFICULTY = ["Easy", "Medium"]
-    SUB_INDEX = "1"
+    SUB_INDEX = "0"
     MODES = get_all_modes(MAIN_INDEX, DIFFICULTY, SUB_INDEX, FPS)
     MAX_INDEX = 400
     print(MODES)
@@ -140,7 +140,7 @@ if __name__ == "__main__":
                                 os.makedirs(mode_output_path)
 
                             src = f"{IMG_FOLDER}/{difficult}/{prefix}{frame_index}{ext}"
-                            dst = f"{mode_output_path}/{prefix}{frame_index}_{dst_frame_count}{ext}"
+                            dst = f"{mode_output_path}/{prefix}{frame_index}{ext}"
                             shutil.copyfile(src, dst)
                         dst_frame_count += 1
 

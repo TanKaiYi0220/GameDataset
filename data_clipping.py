@@ -83,12 +83,12 @@ def write_clip(paths, out_path, fps=1):
 
 if __name__ == "__main__":
     ROOT_PATH = "/datasets/VFI/datasets/AnimeFantasyRPG/"
-    RECORD_NAME = "AnimeFantasyRPG_2_60"
-    ORIGINAL_FPS = 60
+    RECORD_NAME = "AnimeFantasyRPG_3_60"
+    ORIGINAL_FPS = 30
     FPS = f"fps_{ORIGINAL_FPS}"
-    MAIN_INDEX = ["0", "1", "2", "3", "4"]
+    MAIN_INDEX = ["0", "1", "2", "3"]
     DIFFICULTY = ["Easy", "Medium"]
-    SUB_INDEX = "1"
+    SUB_INDEX = "0"
     MODES = get_all_modes(MAIN_INDEX, DIFFICULTY, SUB_INDEX, FPS)
     MAX_INDEX = 800
         
@@ -116,6 +116,7 @@ if __name__ == "__main__":
         avail_seq = [os.path.basename(x) for x in data["available_list"]]
         avail_indices = [get_idx(x) for x in avail_seq]
         avail_indices = sorted(avail_indices)
+
 
         runs = []
         start = 0

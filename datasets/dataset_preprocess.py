@@ -3,7 +3,8 @@ from glob import glob
 import os
 
 from dataset_config import DATASET_CONFIGS, MINOR_DATASET_CONFIGS, iter_dataset_configs
-from remove_identical import identical_images, visualize_color_difference
+from remove_identical import identical_images
+from manual_labeling import review_images
 from utils import loadPNG
 from tqdm import tqdm
 import numpy as np
@@ -32,7 +33,10 @@ def build_frame_index_for_mode(record, mode):
             "reason": "",
         })
 
-    return pd.DataFrame(rows)
+    df = pd.DataFrame(rows)
+    df["reason"] = df["reason"].astype(str)
+
+    return df
 
 def remove_identical_images(raw_df: pd.DataFrame) -> pd.DataFrame:
     with tqdm(range(1, len(raw_df))) as pbar:
@@ -61,11 +65,6 @@ def remove_identical_images(raw_df: pd.DataFrame) -> pd.DataFrame:
 
     return raw_df
 
-def labeling_invalid_frames():
-    # TODO: label invalid frames by manual
-    pass
-
-
 if __name__ == "__main__":
     REMOVE_IDENTICAL = False
     MANUAL_LABELING = True
@@ -91,11 +90,13 @@ if __name__ == "__main__":
             if cfg.difficulty != "Medium":
                 continue
 
-            df_path = f"./data/{cfg.record_name}/{cfg.mode_name}_frame_index.csv"
-            if not os.path.exists(df_path):
-                print(f"Dataframe not found: {df_path}. Skipping...")
-                continue
+            easy_mode_name = cfg.mode_name.replace("Medium", "Easy")
+            easy_df = pd.read_csv(f"./data/{cfg.record_name}/{easy_mode_name}_frame_index.csv", dtype={"reason": "string"})
+            medium_df = pd.read_csv(f"./data/{cfg.record_name}/{cfg.mode_name}_frame_index.csv", dtype={"reason": "string"})
 
             print(f"Manual labeling for record: {cfg.record_name}, mode: {cfg.mode_name}")
+            review_images(easy_df, medium_df)
 
-
+            # save to csv
+            easy_df.to_csv(f"./data/{cfg.record_name}/{easy_mode_name}_frame_index.csv", index=False)
+            medium_df.to_csv(f"./data/{cfg.record_name}/{cfg.mode_name}_frame_index.csv", index=False)

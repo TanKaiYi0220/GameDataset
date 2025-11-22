@@ -120,7 +120,7 @@ if __name__ == "__main__":
     CHECK_IDENTICAL_CROSS_FPS = False       # check identical images between fps 30 and fps 60
     MANUAL_LABELING = False                 # manual labeling based on Medium difficulty and Easy difficulty
     MERGE_DATASETS = False                  # merge Easy and Medium difficulties into one dataframe with global validity
-    DATA_CLIPPING = False                   # clip data to only valid continuous segments across fps 30 and fps 60
+    DATA_CLIPPING = True                   # clip data to only valid continuous segments across fps 30 and fps 60
 
 
     if REMOVE_IDENTICAL:
@@ -197,20 +197,18 @@ if __name__ == "__main__":
             if cfg.difficulty != "Medium":
                 continue
 
-            if cfg.fps != 30:
+            if cfg.fps != 60:
                 continue
 
             print(cfg.mode_index)
 
-            fps_60_name = cfg.mode_name.replace("fps_30", "fps_60")
-            df_30 = pd.read_csv(f"./data/{cfg.record_name}_preprocessed/{cfg.mode_index}_merged_frame_index.csv", dtype={"reason_easy": "string", "reason_medium": "string"})
-            df_60 = pd.read_csv(f"./data/{cfg.record_name}_preprocessed/{cfg.mode_index.replace('fps_30', 'fps_60')}_merged_frame_index.csv", dtype={"reason_easy": "string", "reason_medium": "string"})
+            fps_30_name = cfg.mode_name.replace("fps_60", "fps_30")
+            df_30 = pd.read_csv(f"./data/{cfg.record_name}_preprocessed/{cfg.mode_index.replace('fps_60', 'fps_30')}_merged_frame_index.csv", dtype={"reason_easy": "string", "reason_medium": "string"})
+            df_60 = pd.read_csv(f"./data/{cfg.record_name}_preprocessed/{cfg.mode_index}_merged_frame_index.csv", dtype={"reason_easy": "string", "reason_medium": "string"})
 
             # Clip data to only valid frames
             segments_low = get_valid_continuous_segments(df_30, target_frames_count=60)
 
-            clipped_30_df = pd.DataFrame()
-            clipped_60_df = pd.DataFrame()
             clipped_df = pd.DataFrame()
 
             for start_low, end_low in segments_low:
@@ -219,16 +217,23 @@ if __name__ == "__main__":
 
                 if is_valid_in_60:
                     print(f"Valid clip from frame {start_low} to {end_low} in both fps 30 and fps 60")
-                    clipped_30_df = pd.concat([clipped_30_df, df_30[(df_30["frame_idx"] >= start_low) & (df_30["frame_idx"] <= end_low)].reset_index(drop=True)], ignore_index=True)
-                    clipped_60_df = pd.concat([clipped_60_df, df_60[(df_60["frame_idx"] >= start_low * 2) & (df_60["frame_idx"] <= end_low * 2)].reset_index(drop=True)], ignore_index=True)                    
+                    for frame_idx in range(start_low * 2, end_low * 2 + 2, 1):
+                        # each row: [frame_idx, frame_idx + 1, frame_idx + 2]
+                        row = pd.DataFrame({
+                            "record": [cfg.record],
+                            "fps": [cfg.fps],
+                            "img0": [frame_idx],
+                            "img1": [frame_idx + 1],
+                            "img2": [frame_idx + 2],
+                        })
+                        clipped_df = pd.concat([clipped_df, row], ignore_index=True)
                 else:
                     print(f"Clip from frame {start_low} to {end_low} is NOT valid in fps 60")
 
-            if clipped_30_df.empty or clipped_60_df.empty:
+            if clipped_df.empty:
                 print(f"No valid clips found for record: {cfg.record_name}, mode: {cfg.mode_name}")
                 continue
 
-            clipped_30_df = clipped_30_df.sort_values(by=["frame_idx"]).reset_index(drop=True)
-            clipped_60_df = clipped_60_df.sort_values(by=["frame_idx"]).reset_index(drop=True)
-            clipped_df = pd.concat([clipped_30_df, clipped_60_df], ignore_index=True)
+            print(f"Total valid clips found: {len(clipped_df)}")
+
             clipped_df.to_csv(f"./data/{cfg.record_name}_preprocessed/{cfg.mode_index}_clipped_frame_index.csv", index=False)

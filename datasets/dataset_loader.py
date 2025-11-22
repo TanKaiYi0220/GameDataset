@@ -5,8 +5,8 @@ import pandas as pd
 import torch
 from torch.utils.data import Dataset
 import cv2
-from utils import load_backward_velocity
-from dataset_config import MINOR_DATASET_CONFIGS, iter_dataset_configs
+from .dataset_config import MINOR_DATASET_CONFIGS, iter_dataset_configs
+from .utils import load_backward_velocity
 
 DEFAULT_MODALITY_CONFIG = {
     "colorNoScreenUI": {
@@ -118,6 +118,7 @@ class FlowEstimationDataset(BaseDataset):
             mode = self.mode.replace("fps_60", "fps_30")
 
         item = {
+            "frame_range": f"frame_{frame_0_idx:04d}_{frame_1_idx:04d}",
             "input": {},
             "ground_truth": {}
         }
@@ -140,6 +141,7 @@ class VFIDataset(BaseDataset):
         frame_2_idx = row["img2"]
 
         item = {
+            "frame_range": f"frame_{frame_0_idx:04d}_{frame_2_idx:04d}",
             "input": {},
             "ground_truth": {}
         }

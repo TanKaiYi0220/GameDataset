@@ -20,7 +20,7 @@ def identical_images(img1: np.ndarray, img2: np.ndarray) -> bool:
     difference = psnr(img1, img2, data_range=255)
 
     if np.isfinite(difference) == False:
-        print("Identical images (PSNR=inf). Setting PSNR to 0.")
+        # print("Identical images (PSNR=inf). Setting PSNR to 0.")
         return True
 
     if difference > 48: # maximum PSNR for 8-bit images is around 48 dB

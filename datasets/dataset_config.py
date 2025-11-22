@@ -20,15 +20,20 @@ class DatasetConfig:
         return f"{self.main_idx}_{self.difficulty}_{self.sub_idx}_fps_{self.fps}"
     
     @property
+    def mode_index(self) -> str:
+        return f"{self.main_idx}_fps_{self.fps}"
+    
+    @property
     def record_name(self) -> str:
         return self.record
     
 # ------------------------------ USUAL CONFIG TO USED ------------------------------
 MINOR_DATASET_CONFIGS = {
+    "name": "AnimeFantasyRPG_3_Minor",
     "root_dir": "/datasets/VFI/datasets/AnimeFantasyRPG",
     "records": {
         "AnimeFantasyRPG_3_60": {
-            "main_indices": ["0", "1"],
+            "main_indices": ["1", "3"],
             "difficulties": ["Easy", "Medium"],
             "sub_index": ["0", "0"],
             "fps": [30, 60],
@@ -38,6 +43,7 @@ MINOR_DATASET_CONFIGS = {
 }
 
 DATASET_CONFIGS = {
+    "name": "AnimeFantasyRPG_3_Full",
     "root_dir": "/datasets/VFI/datasets/AnimeFantasyRPG",
     "records": {
         "AnimeFantasyRPG_3_60": {

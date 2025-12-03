@@ -29,13 +29,13 @@ class DatasetConfig:
     
 # ------------------------------ USUAL CONFIG TO USED ------------------------------
 MINOR_DATASET_CONFIGS = {
-    "name": "AnimeFantasyRPG_3_Minor",
+    "name": "AnimeFantasyRPG_3",
     "root_dir": "/datasets/VFI/datasets/AnimeFantasyRPG",
     "records": {
         "AnimeFantasyRPG_3_60": {
-            "main_indices": ["1", "3"],
+            "main_indices": ["0", "1"],
             "difficulties": ["Easy", "Medium"],
-            "sub_index": ["0", "0"],
+            "sub_index": ["1", "1"],
             "fps": [30, 60],
             "max_index": [400, 800],  # depending on fps
         }
@@ -47,9 +47,37 @@ DATASET_CONFIGS = {
     "root_dir": "/datasets/VFI/datasets/AnimeFantasyRPG",
     "records": {
         "AnimeFantasyRPG_3_60": {
-            "main_indices": ["0", "1", "2", "3", "4"],
-            "difficulties": ["Easy", "Medium"],
-            "sub_index": ["0", "0", "0", "0", "0"],
+            "main_indices": ["0", "1", "2", "3"],
+            "difficulties": ["Easy", "Medium", "Difficult"],
+            "sub_index": ["1", "1", "1", "1"],
+            "fps": [30, 60],
+            "max_index": [400, 800],  # depending on fps
+        }
+    }
+}
+
+VFX_DATASET_CONFIGS = {
+    "name": "AnimeFantasyRPG_3_VFX",
+    "root_dir": "/datasets/VFI/datasets/AnimeFantasyRPG",
+    "records": {
+        "AnimeFantasyRPG_3_60": {
+            "main_indices": ["0", "1", "2", "3"],
+            "difficulties": ["Difficult"],
+            "sub_index": ["1", "1", "1", "1"],
+            "fps": [30, 60],
+            "max_index": [400, 800],  # depending on fps
+        }
+    }
+}
+
+STAIR_DATASET_CONFIG = {
+    "name": "AnimeFantasyRPG_2_STAIR",
+    "root_dir": "/datasets/VFI/datasets/AnimeFantasyRPG",
+    "records": {
+        "AnimeFantasyRPG_2_60": {
+            "main_indices": ["4"],
+            "difficulties": ["Easy", "Medium", "Difficult"],
+            "sub_index": ["0"],
             "fps": [30, 60],
             "max_index": [400, 800],  # depending on fps
         }

@@ -120,7 +120,8 @@ class FlowEstimationDataset(BaseDataset):
         item = {
             "frame_range": f"frame_{frame_0_idx:04d}_{frame_1_idx:04d}",
             "input": {},
-            "ground_truth": {}
+            "ground_truth": {},
+            "valid": {row["valid"]}
         }
 
         img_0_path = self._build_modality_path(self.record, mode, frame_0_idx, "colorNoScreenUI")
@@ -135,6 +136,7 @@ class FlowEstimationDataset(BaseDataset):
 
 class VFIDataset(BaseDataset):
     def __getitem__(self, idx):
+        # fps 30 -> fps 60
         row = self.df.iloc[idx * 2]
         frame_0_idx = row["img0"]
         frame_1_idx = row["img1"]
@@ -143,7 +145,8 @@ class VFIDataset(BaseDataset):
         item = {
             "frame_range": f"frame_{frame_0_idx:04d}_{frame_2_idx:04d}",
             "input": {},
-            "ground_truth": {}
+            "ground_truth": {},
+            "valid": row["valid"]
         }
 
         img_0_path = self._build_modality_path(self.record, self.mode, frame_0_idx, "colorNoScreenUI")
@@ -155,7 +158,7 @@ class VFIDataset(BaseDataset):
 
         item["input"]["colorNoScreenUI"] = (img_0_path, img_2_path)
         item["ground_truth"]["backwardVel_Depth"] = bmv
-        item["ground_truth"]["forwardVel_depth"] = fmv
+        item["ground_truth"]["forwardVel_Depth"] = fmv
         item["ground_truth"]["colorNoScreenUI"] = (img_1_path)
 
         return item

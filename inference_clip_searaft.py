@@ -25,7 +25,6 @@ from models.SEARAFT.core.utils.flow_viz import flow_to_image
 from models.SEARAFT.core.utils.utils import load_ckpt
 
 from tqdm import tqdm
-from skimage.metrics import peak_signal_noise_ratio as psnr
 import matplotlib.pyplot as plt
 
 def create_color_bar(height, width, color_map):

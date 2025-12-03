@@ -1,7 +1,10 @@
 from datasets.dataset_loader import VFIDataset
-from datasets.dataset_config import MINOR_DATASET_CONFIGS, iter_dataset_configs
+from datasets.dataset_config import DATASET_CONFIGS, MINOR_DATASET_CONFIGS, VFX_DATASET_CONFIGS, STAIR_DATASET_CONFIG, iter_dataset_configs
 import pandas as pd
-from src.utils import show_images_switchable, flow_to_image, save_img
+from src.gameData_loader import load_backward_velocity, load_forward_velocity
+from src.utils import show_images_switchable, flow_to_image, save_img, save_np_array
+from evaluation import TaskEvaluator, VFI_METRICS
+
 import cv2
 import torch
 import numpy as np
@@ -13,12 +16,14 @@ sys.path.append('models/IFRNet')
 from tqdm import tqdm
 
 from models.IFRNet import Model
+from skimage.metrics import peak_signal_noise_ratio as psnr
 from utils import warp
 
-ROOT_DIR = "./datasets/data/AnimeFantasyRPG_3_60_preprocessed"
+
+ROOT_DIR = "./datasets/data/"
 MODEL_PATH = "./models/IFRNet/checkpoints/IFRNet/IFRNet_Vimeo90K.pth"
 OUTPUT_DIR = "./output/IFRNet/"
-
+DATASET = STAIR_DATASET_CONFIG
 
 def main():
     # Load Model
@@ -26,15 +31,17 @@ def main():
     model.load_state_dict(torch.load(MODEL_PATH))
 
     # Load Dataset
-    for cfg in iter_dataset_configs(MINOR_DATASET_CONFIGS):
+    for cfg in iter_dataset_configs(DATASET):
         if cfg.fps != 60:
             continue
 
-        df = pd.read_csv(f"{ROOT_DIR}/{cfg.mode_index}_clipped_frame_index.csv")
+        df = pd.read_csv(f"{ROOT_DIR}/{cfg.record_name}_preprocessed/{cfg.mode_index}_raw_sequence_frame_index.csv")
         
+        vfi_evaluator = TaskEvaluator(task_name="VFI", metric_fns=VFI_METRICS)
+
         dataset = VFIDataset(
             df=df,
-            root_dir=MINOR_DATASET_CONFIGS["root_dir"],
+            root_dir=DATASET["root_dir"],
             record=cfg.record,
             mode=cfg.mode_path,
             input_fps=30,
@@ -51,6 +58,8 @@ def main():
                 img0_path = input["colorNoScreenUI"][0]
                 img1_path = input["colorNoScreenUI"][1]
                 imgGT_path = gt["colorNoScreenUI"]
+                bmv_path = gt["backwardVel_Depth"]
+                fmv_path = gt["forwardVel_Depth"]
 
                 img0_np = cv2.imread(img0_path)
                 img1_np = cv2.imread(img1_path)
@@ -91,25 +100,51 @@ def main():
                 save_img(f"{save_dir}/image_1.png", img1_np)
                 save_img(f"{save_dir}/image_gt.png", imgGT_np)
                 save_img(f"{save_dir}/image_pred.png", imgPred_np)
+                save_np_array(f"{save_dir}/flow_1_to_0.npy", up_flow0_1_np)
+                save_np_array(f"{save_dir}/flow_1_to_2.npy", up_flow1_1_np)
                 save_img(f"{save_dir}/flow_1_to_0.png", up_flow0_1_np)
                 save_img(f"{save_dir}/flow_1_to_2.png", up_flow1_1_np)
                 save_img(f"{save_dir}/flow_mask.png", up_mask_1_np)
                 save_img(f"{save_dir}/image_0_warped.png", img0_warped_np)
                 save_img(f"{save_dir}/image_1_warped.png", img1_warped_np)
 
+                # evaluation
+                bmv, _ = load_backward_velocity(bmv_path)
+                fmv, _ = load_forward_velocity(fmv_path)
+                
+                meta = {
+                    "record": cfg.record,
+                    "mode": cfg.mode_path,
+                    "frame_range": sample["frame_range"],
+                    "inference_time": infer_time,
+                    "valid": sample["valid"]
+                }
+
+                result = vfi_evaluator.evaluate(
+                    meta=meta,
+                    img_gt=imgGT_np,
+                    img_pred=imgPred_np,
+                    flow_1_to_0=up_flow0_1,
+                    flow_1_to_2=up_flow1_1,
+                    bmv=bmv,
+                    fmv=fmv
+                )
+                
+
                 pbar.set_postfix({
                     "FrameRange": sample["frame_range"],
-                    "InferenceTime": infer_time
+                    "PSNR": f"{result['psnr']:.2f}",
+                    "EPE_1_to_0": f"{result['epe_1_to_0']:.3f}",
+                    "EPE_1_to_2": f"{result['epe_1_to_2']:.3f}",
+                    "InferenceTime": f"{result['inference_time']:.4f}",
+                    "Valid": sample["valid"]
                 })
 
+        eval_df = vfi_evaluator.to_dataframe()
+        eval_path = os.path.join(OUTPUT_DIR, f"{cfg.record}/{cfg.mode_name}_evaluation_results.csv")
+        eval_df.to_csv(eval_path, index=False)
+        print(f"Saving Evaluation Result into {eval_path}")
+
             
-
-
-
-
-
-            
-
-
 if __name__ == "__main__":
     main()

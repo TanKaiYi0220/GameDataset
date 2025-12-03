@@ -2,7 +2,7 @@ import pandas as pd
 from glob import glob
 import os
 
-from dataset_config import DATASET_CONFIGS, MINOR_DATASET_CONFIGS, iter_dataset_configs
+from dataset_config import DATASET_CONFIGS, MINOR_DATASET_CONFIGS, STAIR_DATASET_CONFIG, iter_dataset_configs
 from remove_identical import identical_images, visualize_color_difference
 from manual_labeling import review_images
 from clipping import get_valid_continuous_segments, check_valid_in_high_fps
@@ -10,7 +10,8 @@ from utils import loadPNG
 from tqdm import tqdm
 import numpy as np
 
-ROOT_DIR = DATASET_CONFIGS["root_dir"]
+DATA_CONFIG = DATASET_CONFIGS
+ROOT_DIR = DATA_CONFIG["root_dir"]
 
 def build_frame_index_for_mode(record, mode):
     rows = []
@@ -40,6 +41,7 @@ def build_frame_index_for_mode(record, mode):
     return df
 
 def remove_identical_images(raw_df: pd.DataFrame) -> pd.DataFrame:
+    invalid_count = 0
     with tqdm(range(1, len(raw_df))) as pbar:
         for i in pbar:
             current_row = raw_df.iloc[i]
@@ -61,8 +63,9 @@ def remove_identical_images(raw_df: pd.DataFrame) -> pd.DataFrame:
             if identical_images(img1, img2):
                 raw_df.at[i, "is_valid"] = False
                 raw_df.at[i, "reason"] = "Identical to previous frame"
+                invalid_count += 1
 
-            pbar.set_postfix({"Current Frame": current_row["frame_idx"], "Valid": raw_df.at[i, "is_valid"]})
+            pbar.set_postfix({"Current Frame": current_row["frame_idx"], "Invalid Count": invalid_count})
 
     return raw_df
 
@@ -120,11 +123,12 @@ if __name__ == "__main__":
     CHECK_IDENTICAL_CROSS_FPS = False       # check identical images between fps 30 and fps 60
     MANUAL_LABELING = False                 # manual labeling based on Medium difficulty and Easy difficulty
     MERGE_DATASETS = False                  # merge Easy and Medium difficulties into one dataframe with global validity
-    DATA_CLIPPING = True                   # clip data to only valid continuous segments across fps 30 and fps 60
+    DATA_CLIPPING = False                   # clip data to only valid continuous segments across fps 30 and fps 60
+    RAW_SEQUENCE = True                    # generate sequence from 0 to MAX INDEX with valid flag
 
 
     if REMOVE_IDENTICAL:
-        for cfg in iter_dataset_configs(MINOR_DATASET_CONFIGS):
+        for cfg in iter_dataset_configs(DATA_CONFIG):
             # initialize dataframe to store frame indices for each mode
             print(f"Processing record: {cfg.record_name}, mode: {cfg.mode_name}")
             raw_df = build_frame_index_for_mode(cfg.record, cfg.mode_path)
@@ -139,7 +143,7 @@ if __name__ == "__main__":
             raw_df.to_csv(f"./data/{cfg.record_name}/{cfg.mode_name}_frame_index.csv", index=False)
 
     if CHECK_IDENTICAL_CROSS_FPS:
-        for ctg in iter_dataset_configs(MINOR_DATASET_CONFIGS):
+        for ctg in iter_dataset_configs(DATA_CONFIG):
             # only check in fps 30
             if ctg.fps != 30:
                 continue
@@ -153,7 +157,7 @@ if __name__ == "__main__":
             
 
     if MANUAL_LABELING:
-        for cfg in iter_dataset_configs(MINOR_DATASET_CONFIGS):
+        for cfg in iter_dataset_configs(DATA_CONFIG):
             # only label in Medium difficulty
             if cfg.difficulty != "Medium":
                 continue
@@ -170,7 +174,7 @@ if __name__ == "__main__":
             medium_df.to_csv(f"./data/{cfg.record_name}/{cfg.mode_name}_frame_index.csv", index=False)
 
     if MERGE_DATASETS:
-        for cfg in iter_dataset_configs(MINOR_DATASET_CONFIGS):
+        for cfg in iter_dataset_configs(DATA_CONFIG):
             # merge Easy and Medium difficulties
             if cfg.difficulty != "Medium":
                 continue
@@ -192,7 +196,7 @@ if __name__ == "__main__":
             merged_df.to_csv(f"./data/{cfg.record_name}_preprocessed/{cfg.mode_index}_merged_frame_index.csv", index=False)
 
     if DATA_CLIPPING:
-        for cfg in iter_dataset_configs(MINOR_DATASET_CONFIGS):
+        for cfg in iter_dataset_configs(DATA_CONFIG):
             # only clip Medium difficulty since Easy & Medium have been merged
             if cfg.difficulty != "Medium":
                 continue
@@ -225,6 +229,7 @@ if __name__ == "__main__":
                             "img0": [frame_idx],
                             "img1": [frame_idx + 1],
                             "img2": [frame_idx + 2],
+                            "valid": True
                         })
                         clipped_df = pd.concat([clipped_df, row], ignore_index=True)
                 else:
@@ -237,3 +242,74 @@ if __name__ == "__main__":
             print(f"Total valid clips found: {len(clipped_df)}")
 
             clipped_df.to_csv(f"./data/{cfg.record_name}_preprocessed/{cfg.mode_index}_clipped_frame_index.csv", index=False)
+
+    if RAW_SEQUENCE:
+        for cfg in iter_dataset_configs(DATA_CONFIG):
+            # only clip Medium difficulty since Easy & Medium have been merged
+            if cfg.difficulty != "Medium":
+                continue
+
+            if cfg.fps != 60:
+                continue
+
+            print(cfg.mode_index)
+
+            fps_30_name = cfg.mode_name.replace("fps_60", "fps_30")
+            df_30 = pd.read_csv(f"./data/{cfg.record_name}_preprocessed/{cfg.mode_index.replace('fps_60', 'fps_30')}_merged_frame_index.csv", dtype={"reason_easy": "string", "reason_medium": "string"})
+            df_60 = pd.read_csv(f"./data/{cfg.record_name}_preprocessed/{cfg.mode_index}_merged_frame_index.csv", dtype={"reason_easy": "string", "reason_medium": "string"})
+
+            # Generate full sequence with valid flag
+            raw_seq_df = pd.DataFrame()
+
+            for frame_idx in range(0, cfg.max_index - 1, 1):
+                valid_flag = True
+                if frame_idx % 2 == 0: # even
+                    #       HERE
+                    # 1 ---- 2 ---- 3 ---- 4
+                    # True   False  True   True
+                    # 2 ---- 2 ---- 3 ---- 4 ==> Still Valid
+                    # True   True   False  True
+                    # 1 ---- 2 ---- 2 ---- 4 ==> Invalid
+                    # True   True   True   False
+                    # 1 ---- 2 ---- 4 ---- 4 ==> Invalid
+                    # Thus, only need to check about [frame_idx + 1] and [frame_idx + 2] 
+                    fps_30_img_2_flag = df_30.at[frame_idx // 2 + 1, "global_is_valid"]
+
+                    fps_60_img_1_flag = df_60.at[frame_idx + 1, "global_is_valid"]
+                    fps_60_img_2_flag = df_60.at[frame_idx + 2, "global_is_valid"]
+
+                    valid_flag = fps_30_img_2_flag and fps_60_img_1_flag and fps_60_img_2_flag
+                else: # odds
+                    #       HERE
+                    # 0 ---- 1 ---- 2 ---- 3
+                    # True   False  True   True
+                    # 0 ---- 0 ---- 2 ---- 3 ==> Invalid
+                    # True   True   False  True
+                    # 0 ---- 2 ---- 2 ---- 3 ==> Invalid
+                    # True   True   True   False
+                    # 0 ---- 1 ---- 2 ---- 2 ==> Invalid
+                    # Thus, only need to check about [frame_idx + 1] and [frame_idx + 2] 
+                    fps_30_img_2_flag = df_30.at[frame_idx // 2 + 1, "global_is_valid"]
+
+                    fps_60_img_0_flag = df_60.at[frame_idx, "global_is_valid"]
+                    fps_60_img_1_flag = df_60.at[frame_idx + 1, "global_is_valid"]
+                    fps_60_img_2_flag = df_60.at[frame_idx + 2, "global_is_valid"]
+
+                    valid_flag = fps_30_img_2_flag and fps_60_img_0_flag and fps_60_img_1_flag and fps_60_img_2_flag
+
+                if frame_idx == 404 or frame_idx == 405:
+                    print(valid_flag)
+
+                row = pd.DataFrame({
+                    "record": [cfg.record],
+                    "fps": [cfg.fps],
+                    "img0": [frame_idx],
+                    "img1": [frame_idx + 1],
+                    "img2": [frame_idx + 2],
+                    "valid": [valid_flag]
+                })
+
+                raw_seq_df = pd.concat([raw_seq_df, row], ignore_index=True)
+
+            raw_seq_df.to_csv(f"./data/{cfg.record_name}_preprocessed/{cfg.mode_index}_raw_sequence_frame_index.csv", index=False)
+            print(f"./data/{cfg.record_name}_preprocessed/{cfg.mode_index}_raw_sequence_frame_index.csv")

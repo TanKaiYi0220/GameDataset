@@ -28,9 +28,9 @@ def review_images(easy_df, medium_df):
     S: 存檔
     Q / ESC: 退出
     """
-    i = 0
-    difficult_idx = 0
-    flow_flag = 0
+    i = 1
+    difficult_idx = 1  # 0: easy, 1: medium
+    flow_flag = 0      # 0: RGB, 1: flow
     win = "Reviewer"
     cv2.namedWindow(win, cv2.WINDOW_NORMAL)
 
@@ -46,31 +46,45 @@ def review_images(easy_df, medium_df):
         backward_vel_easy_path = os.path.join(easy_dir_path, f"backwardVel_Depth_{i}.exr")
         backward_vel_medium_path = os.path.join(medium_dir_path, f"backwardVel_Depth_{i}.exr")
 
-        easy_img = cv2.imread(easy_img_path)
-        medium_img = cv2.imread(medium_img_path)
-        mv_easy, _ = load_backward_velocity(backward_vel_easy_path)
-        mv_medium, _ = load_backward_velocity(backward_vel_medium_path)
+        try:
+            # 根據目前的 difficult_idx / flow_flag 決定要讀哪種圖
+            if difficult_idx == 0:  # easy
+                display_path = easy_img_path   # show_images 裡面顯示的路徑還是用 RGB 那個
+                if flow_flag == 0:
+                    img = cv2.imread(easy_img_path)
+                else:
+                    mv_easy, _ = load_backward_velocity(backward_vel_easy_path)
+                    img = flow_to_image(mv_easy)
+            else:  # medium
+                display_path = medium_img_path
+                if flow_flag == 0:
+                    img = cv2.imread(medium_img_path)
+                else:
+                    mv_medium, _ = load_backward_velocity(backward_vel_medium_path)
+                    img = flow_to_image(mv_medium)
 
-        images_path = [easy_img_path, medium_img_path]
-        images = [easy_img, medium_img, flow_to_image(mv_easy), flow_to_image(mv_medium)]
-        # 根據標記顯示不同顏色邊框
-        status = current_easy_row["is_valid"] and current_medium_row["is_valid"]
+            # 根據標記顯示不同顏色邊框
+            status = current_easy_row["is_valid"] and current_medium_row["is_valid"]
 
-        show_images(images[difficult_idx + flow_flag * len(images_path)], images_path[difficult_idx], i, len(easy_df), status, win)
+            show_images(img, display_path, i, len(easy_df), status, win)
+
+        except Exception as e:
+            # 若讀取錯誤就跳到下一張
+            i = min(i + 1, len(easy_df) - 1)
 
         key = cv2.waitKey(0) & 0xFF
 
         # ↑: 82, ↓: 84, →: 83, ←: 81，另外加上 WASD 方便
         if key in (82, ord('w')):  # Up: diff++
-            difficult_idx = (difficult_idx + 1) % len(images_path)
+            difficult_idx = (difficult_idx + 1) % 2  # 0 <-> 1
         elif key in (84, ord('s')):  # Down: diff--
-            difficult_idx = (difficult_idx - 1) % len(images_path)
+            difficult_idx = (difficult_idx - 1) % 2
         elif key in (83, ord('d')):  # Right: frameIndex++
             i = min(i + 1, len(easy_df) - 1)
         elif key in (81, ord('a')):  # Left: frameIndex--
             i = max(i - 1, 0)
         elif key in (ord('f'), ord('F')):  # Flow toggle
-            flow_flag = 1 - flow_flag
+            flow_flag = 1 - flow_flag      # 0 <-> 1
         elif key in (ord('y'), ord('Y')):
             easy_df.at[i, "is_valid"] = True
             medium_df.at[i, "is_valid"] = True
@@ -85,6 +99,7 @@ def review_images(easy_df, medium_df):
             break
 
     cv2.destroyAllWindows()
+
 
 if __name__ == "__main__":
     easy_df = pd.read_csv("./data/AnimeFantasyRPG_3_60/0_Easy_0_fps_60_frame_index.csv", dtype={"reason": "string"})

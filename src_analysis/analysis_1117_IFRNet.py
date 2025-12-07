@@ -53,9 +53,9 @@ def plot_metric(exp_name, mode_dict, metric_name, title_prefix=None):
         x_invalid, y_invalid = x[~mask_valid], y[~mask_valid]
 
         # 統計線用全部資料
-        mean_val = y.mean()
-        median_val = np.median(y)
-        std_val = y.std()
+        mean_val = y_valid.mean()
+        median_val = np.median(y_valid)
+        std_val = y_valid.std()
 
         # invalid 點（小、淡）
         ax.scatter(
@@ -122,7 +122,7 @@ def plot_metric(exp_name, mode_dict, metric_name, title_prefix=None):
 
 
 if __name__ == "__main__":
-    for cfg in iter_dataset_configs(DATASET_CONFIGS):
+    for cfg in iter_dataset_configs(STAIR_DATASET_CONFIG):
         if cfg.fps != 60:
             continue
         

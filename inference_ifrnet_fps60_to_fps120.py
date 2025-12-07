@@ -22,8 +22,8 @@ from utils import warp
 
 ROOT_DIR = "./datasets/data/"
 MODEL_PATH = "./models/IFRNet/checkpoints/IFRNet/IFRNet_Vimeo90K.pth"
-OUTPUT_DIR = "./output/IFRNet/"
-DATASET = DATASET_CONFIGS
+OUTPUT_DIR = "./output/IFRNet_fps_60_to_120/"
+DATASET = STAIR_DATASET_CONFIG
 
 def main():
     # Load Model
@@ -44,7 +44,7 @@ def main():
             root_dir=DATASET["root_dir"],
             record=cfg.record,
             mode=cfg.mode_path,
-            input_fps=30,
+            input_fps=60,
         )
 
         print(cfg.mode_name, len(dataset))
@@ -57,13 +57,13 @@ def main():
 
                 img0_path = input["colorNoScreenUI"][0]
                 img1_path = input["colorNoScreenUI"][1]
-                imgGT_path = gt["colorNoScreenUI"]
+                # imgGT_path = gt["colorNoScreenUI"]
                 bmv_path = gt["backwardVel_Depth"]
                 fmv_path = gt["forwardVel_Depth"]
 
                 img0_np = cv2.imread(img0_path)
                 img1_np = cv2.imread(img1_path)
-                imgGT_np = cv2.imread(imgGT_path)
+                # imgGT_np = cv2.imread(imgGT_path)
 
                 # Inference
                 img0 = (torch.tensor(img0_np.transpose(2, 0, 1)).float() / 255.0).unsqueeze(0).cuda()
@@ -98,7 +98,7 @@ def main():
                 os.makedirs(f"{save_dir}", exist_ok=True)
                 save_img(f"{save_dir}/image_0.png", img0_np)
                 save_img(f"{save_dir}/image_1.png", img1_np)
-                save_img(f"{save_dir}/image_gt.png", imgGT_np)
+                # save_img(f"{save_dir}/image_gt.png", imgGT_np)
                 save_img(f"{save_dir}/image_pred.png", imgPred_np)
                 save_np_array(f"{save_dir}/flow_1_to_0.npy", up_flow0_1_np)
                 save_np_array(f"{save_dir}/flow_1_to_2.npy", up_flow1_1_np)
@@ -109,34 +109,34 @@ def main():
                 save_img(f"{save_dir}/image_1_warped.png", img1_warped_np)
 
                 # evaluation
-                bmv, _ = load_backward_velocity(bmv_path)
-                fmv, _ = load_forward_velocity(fmv_path)
+                # bmv, _ = load_backward_velocity(bmv_path)
+                # fmv, _ = load_forward_velocity(fmv_path)
                 
-                meta = {
-                    "record": cfg.record,
-                    "mode": cfg.mode_path,
-                    "frame_range": sample["frame_range"],
-                    "inference_time": infer_time,
-                    "valid": sample["valid"]
-                }
+                # meta = {
+                #     "record": cfg.record,
+                #     "mode": cfg.mode_path,
+                #     "frame_range": sample["frame_range"],
+                #     "inference_time": infer_time,
+                #     "valid": sample["valid"]
+                # }
 
-                result = vfi_evaluator.evaluate(
-                    meta=meta,
-                    img_gt=imgGT_np,
-                    img_pred=imgPred_np,
-                    flow_1_to_0=up_flow0_1,
-                    flow_1_to_2=up_flow1_1,
-                    bmv=bmv,
-                    fmv=fmv
-                )
+                # result = vfi_evaluator.evaluate(
+                #     meta=meta,
+                #     img_gt=imgGT_np,
+                #     img_pred=imgPred_np,
+                #     flow_1_to_0=up_flow0_1,
+                #     flow_1_to_2=up_flow1_1,
+                #     bmv=bmv,
+                #     fmv=fmv
+                # )
                 
 
                 pbar.set_postfix({
                     "FrameRange": sample["frame_range"],
-                    "PSNR": f"{result['psnr']:.2f}",
-                    "EPE_1_to_0": f"{result['epe_1_to_0']:.3f}",
-                    "EPE_1_to_2": f"{result['epe_1_to_2']:.3f}",
-                    "InferenceTime": f"{result['inference_time']:.4f}",
+                    # "PSNR": f"{result['psnr']:.2f}",
+                    # "EPE_1_to_0": f"{result['epe_1_to_0']:.3f}",
+                    # "EPE_1_to_2": f"{result['epe_1_to_2']:.3f}",
+                    # "InferenceTime": f"{result['inference_time']:.4f}",
                     "Valid": sample["valid"]
                 })
 

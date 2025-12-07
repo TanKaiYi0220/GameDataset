@@ -10,7 +10,7 @@ from utils import loadPNG
 from tqdm import tqdm
 import numpy as np
 
-DATA_CONFIG = DATASET_CONFIGS
+DATA_CONFIG = STAIR_DATASET_CONFIG
 ROOT_DIR = DATA_CONFIG["root_dir"]
 
 def build_frame_index_for_mode(record, mode):
@@ -296,9 +296,6 @@ if __name__ == "__main__":
                     fps_60_img_2_flag = df_60.at[frame_idx + 2, "global_is_valid"]
 
                     valid_flag = fps_30_img_2_flag and fps_60_img_0_flag and fps_60_img_1_flag and fps_60_img_2_flag
-
-                if frame_idx == 404 or frame_idx == 405:
-                    print(valid_flag)
 
                 row = pd.DataFrame({
                     "record": [cfg.record],

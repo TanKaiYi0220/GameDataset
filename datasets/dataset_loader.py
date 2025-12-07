@@ -136,11 +136,16 @@ class FlowEstimationDataset(BaseDataset):
 
 class VFIDataset(BaseDataset):
     def __getitem__(self, idx):
-        # fps 30 -> fps 60
-        row = self.df.iloc[idx * 2]
-        frame_0_idx = row["img0"]
-        frame_1_idx = row["img1"]
-        frame_2_idx = row["img2"]
+        if self.df_fps == self.input_fps: # 60 -> 120
+            row = self.df.iloc[idx]
+            frame_0_idx = row["img0"]
+            frame_1_idx = "None"
+            frame_2_idx = row["img1"]
+        else: # 30 -> 60
+            row = self.df.iloc[idx * 2]
+            frame_0_idx = row["img0"]
+            frame_1_idx = row["img1"]
+            frame_2_idx = row["img2"]
 
         item = {
             "frame_range": f"frame_{frame_0_idx:04d}_{frame_2_idx:04d}",

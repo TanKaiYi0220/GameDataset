@@ -10,6 +10,10 @@ from utils import loadPNG
 from tqdm import tqdm
 import numpy as np
 
+import sys
+sys.path.append('../')
+from datasets.utils import load_backward_velocity
+
 DATA_CONFIG = STAIR_DATASET_CONFIG
 ROOT_DIR = DATA_CONFIG["root_dir"]
 
@@ -118,13 +122,22 @@ def get_valid_clip(df: pd.DataFrame, target_frames_count: int) -> pd.DataFrame:
 
     return segments
 
+def cosine_project_ratio(array1, array2):
+    # calculate the dot product of each pair of vectors in the two arrays
+    array_inner = array1[..., 0] * array2[..., 0] + array1[..., 1] * array2[..., 1]
+    # array1_mag = np.linalg.norm(array1, axis=1)
+    array2_mag = np.linalg.norm(array2, axis=-1)
+    array_cos_sim = array_inner / (array2_mag ** 2)
+
+    return array_cos_sim
+
 if __name__ == "__main__":
     REMOVE_IDENTICAL = False                # initial raw frame index generation with identical images removed
     CHECK_IDENTICAL_CROSS_FPS = False       # check identical images between fps 30 and fps 60
     MANUAL_LABELING = False                 # manual labeling based on Medium difficulty and Easy difficulty
     MERGE_DATASETS = False                  # merge Easy and Medium difficulties into one dataframe with global validity
-    DATA_CLIPPING = False                   # clip data to only valid continuous segments across fps 30 and fps 60
-    RAW_SEQUENCE = True                    # generate sequence from 0 to MAX INDEX with valid flag
+    RAW_SEQUENCE = False                    # generate sequence from 0 to MAX INDEX with valid flag
+    LINEARLITY_CHECK = True                # check motion linearlity between 2 to 0 and 1 to 0 flow by distance indexing 
 
 
     if REMOVE_IDENTICAL:
@@ -195,54 +208,6 @@ if __name__ == "__main__":
             os.makedirs(f"./data/{cfg.record_name}_preprocessed/", exist_ok=True)
             merged_df.to_csv(f"./data/{cfg.record_name}_preprocessed/{cfg.mode_index}_merged_frame_index.csv", index=False)
 
-    if DATA_CLIPPING:
-        for cfg in iter_dataset_configs(DATA_CONFIG):
-            # only clip Medium difficulty since Easy & Medium have been merged
-            if cfg.difficulty != "Medium":
-                continue
-
-            if cfg.fps != 60:
-                continue
-
-            print(cfg.mode_index)
-
-            fps_30_name = cfg.mode_name.replace("fps_60", "fps_30")
-            df_30 = pd.read_csv(f"./data/{cfg.record_name}_preprocessed/{cfg.mode_index.replace('fps_60', 'fps_30')}_merged_frame_index.csv", dtype={"reason_easy": "string", "reason_medium": "string"})
-            df_60 = pd.read_csv(f"./data/{cfg.record_name}_preprocessed/{cfg.mode_index}_merged_frame_index.csv", dtype={"reason_easy": "string", "reason_medium": "string"})
-
-            # Clip data to only valid frames
-            segments_low = get_valid_continuous_segments(df_30, target_frames_count=60)
-
-            clipped_df = pd.DataFrame()
-
-            for start_low, end_low in segments_low:
-                # check if all frames in this segment are valid in fps 60
-                is_valid_in_60 = check_valid_in_high_fps(df_60, (start_low, end_low))
-
-                if is_valid_in_60:
-                    print(f"Valid clip from frame {start_low} to {end_low} in both fps 30 and fps 60")
-                    for frame_idx in range(start_low * 2, end_low * 2 + 2, 1):
-                        # each row: [frame_idx, frame_idx + 1, frame_idx + 2]
-                        row = pd.DataFrame({
-                            "record": [cfg.record],
-                            "fps": [cfg.fps],
-                            "img0": [frame_idx],
-                            "img1": [frame_idx + 1],
-                            "img2": [frame_idx + 2],
-                            "valid": True
-                        })
-                        clipped_df = pd.concat([clipped_df, row], ignore_index=True)
-                else:
-                    print(f"Clip from frame {start_low} to {end_low} is NOT valid in fps 60")
-
-            if clipped_df.empty:
-                print(f"No valid clips found for record: {cfg.record_name}, mode: {cfg.mode_name}")
-                continue
-
-            print(f"Total valid clips found: {len(clipped_df)}")
-
-            clipped_df.to_csv(f"./data/{cfg.record_name}_preprocessed/{cfg.mode_index}_clipped_frame_index.csv", index=False)
-
     if RAW_SEQUENCE:
         for cfg in iter_dataset_configs(DATA_CONFIG):
             # only clip Medium difficulty since Easy & Medium have been merged
@@ -310,3 +275,56 @@ if __name__ == "__main__":
 
             raw_seq_df.to_csv(f"./data/{cfg.record_name}_preprocessed/{cfg.mode_index}_raw_sequence_frame_index.csv", index=False)
             print(f"./data/{cfg.record_name}_preprocessed/{cfg.mode_index}_raw_sequence_frame_index.csv")
+
+    if LINEARLITY_CHECK:
+        for cfg in iter_dataset_configs(DATA_CONFIG):
+            # only clip Medium difficulty since Easy & Medium have been merged
+            if cfg.difficulty != "Medium":
+                continue
+
+            if cfg.fps != 60:
+                continue
+
+            raw_seq_df = pd.read_csv(f"./data/{cfg.record_name}_preprocessed/{cfg.mode_index}_raw_sequence_frame_index.csv")
+            raw_seq_df["D_index (mean)"] = [-1] * len(raw_seq_df)
+            raw_seq_df["D_index (median)"] = [-1] * len(raw_seq_df)
+            
+            invalid_count = 0
+            with tqdm(range(0, len(raw_seq_df), 2)) as pbar:
+                for frame_idx in pbar:
+                    img_2_idx = frame_idx + 2
+
+                    # fps 30
+                    fps_30_mode_path = cfg.mode_path.replace("fps_60", "fps_30")
+                    fps_30_dir = os.path.join(ROOT_DIR, cfg.record_name, fps_30_mode_path)
+                    backwardVel_fps30_2_0_path = f"{fps_30_dir}/backwardVel_Depth_{img_2_idx // 2}.exr"
+
+                    # fps 60
+                    fps_60_dir = os.path.join(ROOT_DIR, cfg.record_name, cfg.mode_path)
+                    backwardVel_fps60_1_0_path = f"{fps_60_dir}/backwardVel_Depth_{frame_idx + 1}.exr"
+
+                    backwardVel_2_0, _ = load_backward_velocity(backwardVel_fps30_2_0_path)
+                    backwardVel_1_0, _ = load_backward_velocity(backwardVel_fps60_1_0_path)
+
+                    dis_index = cosine_project_ratio(backwardVel_1_0, backwardVel_2_0)
+                    dis_index_mean = np.mean(dis_index)
+                    dis_index_median = np.median(dis_index)
+
+                    raw_seq_df.at[frame_idx, "D_index (mean)"] = dis_index_mean
+                    raw_seq_df.at[frame_idx, "D_index (median)"] = dis_index_median
+
+                    def check_valid(value): # remove floating precision issue
+                        value = round(value, 2)
+                        return value < 0.0 or value > 1.0
+
+                    if check_valid(dis_index_mean) or check_valid(dis_index_median):
+                        invalid_count += 1
+                        print(frame_idx, dis_index_mean, dis_index_median)
+
+                    pbar.set_postfix({"D_index (mean)": dis_index_mean, "D_index (median)": dis_index_median, "invalid count": invalid_count})
+
+                    
+                    
+
+                raw_seq_df.to_csv(f"./data/{cfg.record_name}_preprocessed/{cfg.mode_index}_raw_sequence_frame_index.csv", index=False)
+

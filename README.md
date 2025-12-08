@@ -29,4 +29,7 @@ pip install scikit-image    # Successfully installed imageio-2.37.0 scikit-image
 
 # SGM-VFI
 pip insall timm==0.9.16     # Successfully installed safetensors-0.6.2 timm-0.9.16
+
+# Sklearn
+pip install scikit-learn    # Successfully installed joblib-1.5.2 scikit-learn-1.7.2 threadpoolctl-3.6.0
 ```

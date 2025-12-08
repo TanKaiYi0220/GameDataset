@@ -21,6 +21,69 @@ OUTPUT_DIR = "./output/IFRNet/"
 ANALYSIS_DIR = f"./analysis_results/1208_DistanceIndexing/"
 DATASET = DATASET_CONFIGS
 
+def visualize_clusters(distance_index_df, cluster_summary, K, save_path=None):
+    plt.figure(figsize=(10, 8))
+
+    # 取用顏色（matplotlib 預設 tab10）
+    cmap = plt.cm.get_cmap("tab10", K)
+
+    # scatter plot for each cluster
+    for k in range(K):
+        subset = distance_index_df[distance_index_df["cluster"] == k]
+        plt.scatter(
+            subset["distance index (mean)"], 
+            subset["psnr"], 
+            s=20,
+            color=cmap(k),
+            alpha=0.6,
+            label=f"Cluster {k}"
+        )
+
+    # plot cluster centers
+    plt.scatter(
+        cluster_summary["distance index (mean)"],
+        cluster_summary["psnr"],
+        s=200,
+        c="black",
+        marker="X",
+        linewidths=2,
+        label="Cluster Centers"
+    )
+
+    # draw radius circles and label cluster id
+    ax = plt.gca()
+    for _, row in cluster_summary.iterrows():
+        cx = row["distance index (mean)"]
+        cy = row["psnr"]
+        r = row["radius"]
+
+        circle = plt.Circle((cx, cy), r, color="black", fill=False, linestyle="--", alpha=0.4)
+        ax.add_patch(circle)
+
+        plt.text(
+            cx,
+            cy,
+            f"C{int(row['cluster'])}",
+            fontsize=12,
+            weight="bold",
+            ha="center",
+            va="center",
+            color="white",
+            bbox=dict(boxstyle="circle,pad=0.3", fc="black", ec="none", alpha=0.6)
+        )
+
+    plt.title(f"Cluster Visualization (K={K})", fontsize=16)
+    plt.xlabel("distance index (mean)", fontsize=14)
+    plt.ylabel("psnr", fontsize=14)
+    plt.legend()
+    plt.grid(alpha=0.3)
+    plt.tight_layout()
+
+    if save_path:
+        plt.savefig(save_path, dpi=300)
+        print(f"Plot saved to {save_path}")
+
+    # plt.show()
 
 def cosine_project_ratio(array1, array2):
     # calculate the dot product of each pair of vectors in the two arrays
@@ -125,8 +188,13 @@ if __name__ == "__main__":
                 # )
         
         distance_index_df = pd.DataFrame(rows)
+
         os.makedirs(f"{ANALYSIS_DIR}/{cfg.record_name}/", exist_ok=True)
-        distance_index_df.to_csv(f"{ANALYSIS_DIR}/{cfg.record_name}/{cfg.mode_index}_distance_index.csv", index=False)
+
+        save_dir = f"{ANALYSIS_DIR}/{cfg.record_name}/{cfg.mode_index}"
+        distance_index_df.to_csv(f"{save_dir}_distance_index.csv", index=False)
+
+        print(distance_index_df.describe())
 
         
         # compute quantiles for mean and median
@@ -152,8 +220,7 @@ if __name__ == "__main__":
 
         corr_df = pd.DataFrame(results)
 
-        os.makedirs(f"{ANALYSIS_DIR}/{cfg.record_name}/", exist_ok=True)
-        corr_df.to_csv(f"{ANALYSIS_DIR}/{cfg.record_name}/{cfg.mode_index}_distance_index_corr.csv", index=False)
+        corr_df.to_csv(f"{save_dir}_distance_index_corr.csv", index=False)
         print(corr_df)
 
 
@@ -163,7 +230,8 @@ if __name__ == "__main__":
 
         # 標準化，避免 psnr 尺度遠大於 mean/median
         # 設定 K（可自行調整）
-        for K in range(2, 6):
+        # 設定 K（可自行調整）
+        for K in range(3, 5):
             scaler = StandardScaler()
             X = scaler.fit_transform(features.values)
             kmeans = KMeans(n_clusters=K, random_state=0, n_init=10)
@@ -180,18 +248,54 @@ if __name__ == "__main__":
                 columns=feature_cols
             )
             cluster_summary["cluster"] = range(K)
-            cluster_summary["cluster_counter"] = cluster_summary["cluster"].apply(lambda x: distance_index_df['cluster'].value_counts()[x])
 
-            # 存 clustering 結果
+            # 每個 cluster 的樣本數
+            cluster_counts = distance_index_df["cluster"].value_counts().to_dict()
+            cluster_summary["cluster_size"] = cluster_summary["cluster"].map(cluster_counts).fillna(0).astype(int)
+
+            # 預先建立欄位：correlation & radius
+            cluster_summary["mean↔psnr corr"] = np.nan
+            cluster_summary["median↔psnr corr"] = np.nan
+            cluster_summary["radius"] = np.nan  # 平均 L2 距離（在原始 feature 空間）
+
+            # 對每一個 cluster 計算 correlation 和 radius
+            for k in range(K):
+                subset = distance_index_df[distance_index_df["cluster"] == k]
+
+                if len(subset) < 2:
+                    # 太少點沒辦法算 corr，radius 也直接略過
+                    continue
+
+                # correlation：在該 cluster 內算
+                mean_corr = subset["distance index (mean)"].corr(subset["psnr"])
+                median_corr = subset["distance index (median)"].corr(subset["psnr"])
+
+                cluster_summary.loc[cluster_summary["cluster"] == k, "mean↔psnr corr"] = mean_corr
+                cluster_summary.loc[cluster_summary["cluster"] == k, "median↔psnr corr"] = median_corr
+
+                # radius：用原始尺度 feature 到 center 的平均 L2 distance
+                center_vals = cluster_summary.loc[cluster_summary["cluster"] == k, feature_cols].iloc[0]
+                diffs = subset[feature_cols] - center_vals
+                dists = np.sqrt((diffs ** 2).sum(axis=1))
+                radius = dists.mean()
+
+                cluster_summary.loc[cluster_summary["cluster"] == k, "radius"] = radius
+
+            # 存 clustering 結果（每一點）
             distance_index_df.to_csv(
-                f"{ANALYSIS_DIR}/{cfg.record_name}/{cfg.mode_index}_distance_index_with_clusters_{K}.csv",
-                index=False
-            )
-            cluster_summary.to_csv(
-                f"{ANALYSIS_DIR}/{cfg.record_name}/{cfg.mode_index}_distance_index_cluster_centers_{K}.csv",
+                f"{save_dir}_distance_index_with_clusters_{K}.csv",
                 index=False
             )
 
-            print("K-Means cluster centers (original scale):")
+            # 存 cluster summary：中心 + size + radius + corr 全都寫在一起
+            cluster_summary.to_csv(
+                f"{save_dir}_distance_index_cluster_summary_{K}.csv",
+                index=False
+            )
+
+            print("K-Means cluster summary (original scale + corr + radius):")
             print(cluster_summary)
+            print("Cluster counts:")
             print(distance_index_df['cluster'].value_counts())
+
+            visualize_clusters(distance_index_df, cluster_summary, K, f"{save_dir}_cluster_vis_{K}.png")

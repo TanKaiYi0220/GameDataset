@@ -151,7 +151,8 @@ class VFIDataset(BaseDataset):
             "frame_range": f"frame_{frame_0_idx:04d}_{frame_2_idx:04d}",
             "input": {},
             "ground_truth": {},
-            "valid": row["valid"]
+            "valid": row["valid"],
+            "distance_indexing": [row["D_index (mean)"], row["D_index (median)"]]
         }
 
         img_0_path = self._build_modality_path(self.record, self.mode, frame_0_idx, "colorNoScreenUI")

@@ -137,7 +137,7 @@ if __name__ == "__main__":
     MANUAL_LABELING = False                 # manual labeling based on Medium difficulty and Easy difficulty
     MERGE_DATASETS = False                  # merge Easy and Medium difficulties into one dataframe with global validity
     RAW_SEQUENCE = False                    # generate sequence from 0 to MAX INDEX with valid flag
-    LINEARLITY_CHECK = True                # check motion linearlity between 2 to 0 and 1 to 0 flow by distance indexing 
+    LINEARITY_CHECK = True                 # check motion linearity between 2 to 0 and 1 to 0 flow by distance indexing 
 
 
     if REMOVE_IDENTICAL:
@@ -276,9 +276,8 @@ if __name__ == "__main__":
             raw_seq_df.to_csv(f"./data/{cfg.record_name}_preprocessed/{cfg.mode_index}_raw_sequence_frame_index.csv", index=False)
             print(f"./data/{cfg.record_name}_preprocessed/{cfg.mode_index}_raw_sequence_frame_index.csv")
 
-    if LINEARLITY_CHECK:
+    if LINEARITY_CHECK:
         for cfg in iter_dataset_configs(DATA_CONFIG):
-            # only clip Medium difficulty since Easy & Medium have been merged
             if cfg.difficulty != "Medium":
                 continue
 
@@ -286,8 +285,8 @@ if __name__ == "__main__":
                 continue
 
             raw_seq_df = pd.read_csv(f"./data/{cfg.record_name}_preprocessed/{cfg.mode_index}_raw_sequence_frame_index.csv")
-            raw_seq_df["D_index (mean)"] = [-1] * len(raw_seq_df)
-            raw_seq_df["D_index (median)"] = [-1] * len(raw_seq_df)
+            raw_seq_df["D_index Mean"] = [-1] * len(raw_seq_df)
+            raw_seq_df["D_index Median"] = [-1] * len(raw_seq_df)
             
             invalid_count = 0
             with tqdm(range(0, len(raw_seq_df), 2)) as pbar:
@@ -310,21 +309,21 @@ if __name__ == "__main__":
                     dis_index_mean = np.mean(dis_index)
                     dis_index_median = np.median(dis_index)
 
-                    raw_seq_df.at[frame_idx, "D_index (mean)"] = dis_index_mean
-                    raw_seq_df.at[frame_idx, "D_index (median)"] = dis_index_median
+                    raw_seq_df.at[frame_idx, "D_index Mean"] = dis_index_mean
+                    raw_seq_df.at[frame_idx, "D_index Median"] = dis_index_median
 
                     def check_valid(value): # remove floating precision issue
                         value = round(value, 2)
                         return value < 0.0 or value > 1.0
 
                     if check_valid(dis_index_mean) or check_valid(dis_index_median):
-                        invalid_count += 1
                         print(frame_idx, dis_index_mean, dis_index_median)
+                        invalid_count += 1
+                        dis_index_mean = 0.0 if dis_index_mean < 0 else 1.0
+                        dis_index_median = 0.0 if dis_index_median < 0 else 1.0
 
-                    pbar.set_postfix({"D_index (mean)": dis_index_mean, "D_index (median)": dis_index_median, "invalid count": invalid_count})
+                    pbar.set_postfix({"D_index Mean": dis_index_mean, "D_index Median": dis_index_median, "invalid count": invalid_count})
 
-                    
                     
 
                 raw_seq_df.to_csv(f"./data/{cfg.record_name}_preprocessed/{cfg.mode_index}_raw_sequence_frame_index.csv", index=False)
-

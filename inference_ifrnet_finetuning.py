@@ -21,19 +21,21 @@ from utils import warp
 
 
 ROOT_DIR = "./datasets/data/"
-MODEL_PATH = "./models/IFRNet/checkpoints/IFRNet/IFRNet_Vimeo90K.pth"
-OUTPUT_DIR = "./output/IFRNet/"
+# MODEL_PATH = "./models/IFRNet/checkpoints/IFRNet/IFRNet_Vimeo90K.pth"
+MODEL_PATH = "./output/IFRNet/checkpoints/IFRNet/"
+OUTPUT_DIR = "./output/IFRNet/checkpoints/IFRNet/inference/"
 DATASET = STAIR_DATASET_CONFIG
 
 def main():
-    # Load Model
-    model = Model().cuda().eval()
-    model.load_state_dict(torch.load(MODEL_PATH))
 
     # Load Dataset
     for cfg in iter_dataset_configs(DATASET):
         if cfg.fps != 60:
             continue
+
+        # Load Model
+        model = Model().cuda().eval()
+        model.load_state_dict(torch.load(f"{MODEL_PATH}/{cfg.record}/{cfg.mode_path}/best.pth"))
 
         df = pd.read_csv(f"{ROOT_DIR}/{cfg.record_name}_preprocessed/{cfg.mode_index}_raw_sequence_frame_index.csv")
         

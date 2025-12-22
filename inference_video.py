@@ -21,9 +21,8 @@ from utils import warp
 
 
 ROOT_DIR = "./datasets/data/"
-MODEL_PATH = "./models/IFRNet/checkpoints/IFRNet/IFRNet_Vimeo90K.pth"
-OUTPUT_DIR = "./output/IFRNet/"
-DATASET = DATASET_CONFIGS
+OUTPUT_DIR = "./output/IFRNet/checkpoints/IFRNet/inference/"
+DATASET = STAIR_DATASET_CONFIG
 
 def save_video_from_images(images, video_path, fps=60):
     """
@@ -62,7 +61,7 @@ def main():
     for cfg in iter_dataset_configs(DATASET):
         if cfg.fps != 60:
             continue
-
+            
         df = pd.read_csv(f"{ROOT_DIR}/{cfg.record_name}_preprocessed/{cfg.mode_index}_raw_sequence_frame_index.csv")
         
         dataset = VFIDataset(

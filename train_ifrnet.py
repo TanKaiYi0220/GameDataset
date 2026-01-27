@@ -57,7 +57,7 @@ def make_flow_tensor(bmv, fmv):
     - bmv / fmv : (H, W, >=2) 或 (H, W, 2)
     - 前兩個 channel 是 (dx, dy)
     - IFRNet training 需要 flow = concat(flow_t->0, flow_t->1) => (H, W, 4)
-    回傳: torch float tensor shape [1, 4, H, W]
+    回傳: torch float tensor shape [1, 4, H, W]665G
     """
     if bmv.ndim == 2:
         raise ValueError("bmv looks like 2D array; expected HxWxC.")
@@ -133,7 +133,8 @@ class VFITrainWrapper(Dataset):
             bmv, _ = load_backward_velocity(bmv_path)
             fmv, _ = load_forward_velocity(fmv_path)
 
-            flow = make_flow_tensor(bmv, fmv)  # [4,H,W] (no [0]!)
+            # concat along channel: [1,4,H,W] -> take [0] => [4,H,W]
+            flow = torch.cat([bmv, fmv], dim=1)[0].float()
         else:
             _, H, W = img0.shape
             flow = torch.zeros((4, H, W), dtype=torch.float32)
@@ -149,6 +150,22 @@ def evaluate(model, dataloader, device):
     model.eval()
     evaluator = TaskEvaluator(task_name="VFI", metric_fns=VFI_METRICS)
 
+    # 逐 sample 記錄 loss（避免 TaskEvaluator 不收 meta 欄位時仍可補回 df）
+    loss_rows = []
+
+    def _pick_loss(loss_tensor, b):
+        # loss_tensor could be scalar tensor or [B] tensor
+        if loss_tensor is None:
+            return float("nan")
+        if not torch.is_tensor(loss_tensor):
+            return float(loss_tensor)
+        if loss_tensor.ndim == 0:
+            return float(loss_tensor.detach().cpu().item())
+        if loss_tensor.ndim == 1:
+            return float(loss_tensor.detach().cpu()[b].item())
+        # fallback: mean over all dims
+        return float(loss_tensor.detach().cpu().mean().item())
+
     for batch in tqdm(dataloader, desc="Eval", leave=False):
         img0, imgt, img1, flow, embt, samples = batch
         img0 = img0.to(device)
@@ -157,36 +174,62 @@ def evaluate(model, dataloader, device):
         flow = flow.to(device)
         embt = embt.to(device)
 
-        # IFRNet training forward (same signature as your DDP training code)
-        imgt_pred, loss_rec, loss_geo, loss_dis, up_flow0_1, up_flow1_1, up_mask_1 = model(img0, img1, embt, imgt, flow)
+        # forward (same signature)
+        imgt_pred, loss_rec, loss_geo, loss_dis, up_flow0_1, up_flow1_1, up_mask_1 = model(
+            img0, img1, embt, imgt, flow
+        )
 
-        # per-sample metric
-        for b in range(img0.shape[0]):
-            # convert to uint8 for evaluator (keep consistent with your original pipeline)
+        # per-sample metric + per-sample loss
+        B = img0.shape[0]
+        for b in range(B):
             pred_np = (imgt_pred[b].permute(1, 2, 0).clamp(0, 1).cpu().numpy() * 255.0).astype(np.uint8)
-            gt_np = (imgt[b].permute(1, 2, 0).clamp(0, 1).cpu().numpy() * 255.0).astype(np.uint8)
+            gt_np   = (imgt[b].permute(1, 2, 0).clamp(0, 1).cpu().numpy() * 255.0).astype(np.uint8)
 
+            rec = _pick_loss(loss_rec, b)
+            geo = _pick_loss(loss_geo, b)
+            dis = _pick_loss(loss_dis, b)
+            tot = rec + geo + dis
+
+            # meta (若 TaskEvaluator 會把 meta 展開成欄位，這裡就能直接進 df)
             meta = {
                 "frame_range": samples["frame_range"][b] if isinstance(samples, dict) and "frame_range" in samples else None,
                 "valid": samples["valid"][b] if isinstance(samples, dict) and "valid" in samples else None,
+                "loss_rec": rec,
+                "loss_geo": geo,
+                "loss_dis": dis,
+                "loss_total": tot,
             }
 
             evaluator.evaluate(
                 meta=meta,
                 img_gt=gt_np,
                 img_pred=pred_np,
-                # evaluator 也需要 flow_* 的話，你可改成用 model.inference() 取出 up_flow/up_mask
                 flow_1_to_0=up_flow0_1,
                 flow_1_to_2=up_flow1_1,
                 bmv=flow[:, 0:2],
                 fmv=flow[:, 2:4],
             )
 
+            # 保底：即使 TaskEvaluator 不把 meta 存進 df，也能用這個補欄位
+            loss_rows.append({
+                "loss_rec": rec,
+                "loss_geo": geo,
+                "loss_dis": dis,
+                "loss_total": tot,
+            })
+
     df = evaluator.to_dataframe()
-    # 以 psnr mean 當主要指標（你 evaluator 裡通常會有 psnr 欄位）
+
+    # 保底補 loss 欄位（以 row order 對齊）
+    if df is not None and len(df) == len(loss_rows):
+        for k in ["loss_rec", "loss_geo", "loss_dis", "loss_total"]:
+            if k not in df.columns:
+                df[k] = [r[k] for r in loss_rows]
+
     if "psnr" in df.columns and len(df) > 0:
         return float(df["psnr"].mean()), df
     return float("nan"), df
+
 
 
 def train_one_cfg(args, cfg, device, logger):
@@ -206,7 +249,7 @@ def train_one_cfg(args, cfg, device, logger):
         batch_size=args.batch_size,
         shuffle=True,
         num_workers=args.num_workers,
-        pin_memory=True,
+        pin_memory=False,
         drop_last=True,
     )
 
@@ -216,13 +259,13 @@ def train_one_cfg(args, cfg, device, logger):
         batch_size=args.eval_batch_size,
         shuffle=False,
         num_workers=args.num_workers,
-        pin_memory=True,
+        pin_memory=False,
         drop_last=False,
     )
 
     model = Model().to(device)
     if args.resume_path is not None and os.path.isfile(args.resume_path):
-        model.load_state_dict(torch.load(args.resume_path, map_location="cpu"))
+        model.load_state_dict(torch.load(args.resume_path))
         logger.info(f"Resumed from {args.resume_path}")
 
     model.train()
@@ -236,6 +279,15 @@ def train_one_cfg(args, cfg, device, logger):
     best_psnr = -1e9
 
     logger.info(f"Start training: {cfg.record}/{cfg.mode_path}, samples={len(train_dataset)}, it/epoch={len(train_loader)}")
+
+    # -------------------------
+    # Epoch 0 eval (before fine-tuning)
+    # -------------------------
+    psnr0, eval_df0 = evaluate(model, eval_loader, device)
+    logger.info(f"[{cfg.record}/{cfg.mode_path}] eval epoch 0 (before FT): psnr_mean={psnr0:.3f}")
+
+    # save epoch0 eval csv
+    eval_df0.to_csv(os.path.join(save_dir, "eval_epoch_0.csv"), index=False)
 
     for epoch in range(args.epochs):
         model.train()
@@ -329,13 +381,15 @@ def main():
     parser.add_argument("--model_name", default="IFRNet", type=str)
     parser.add_argument("--root_dir", default="./datasets/data/", type=str)  # your ROOT_DIR
     parser.add_argument("--dataset_root_dir", default=STAIR_DATASET_CONFIG["root_dir"], type=str)
-    parser.add_argument("--output_dir", default="./output/IFRNet/", type=str)
+    # parser.add_argument("--output_dir", default="./output/IFRNet_Flow/", type=str)
+    # parser.add_argument("--resume_path", default="./models/IFRNet/checkpoints/IFRNet/IFRNet_Vimeo90K.pth", type=str)
+    parser.add_argument("--output_dir", default="./output/IFRNet_Scratch/", type=str)
     parser.add_argument("--resume_path", default=None, type=str)
 
     parser.add_argument("--epochs", default=100, type=int)
     parser.add_argument("--batch_size", default=1, type=int)
     parser.add_argument("--eval_batch_size", default=1, type=int)
-    parser.add_argument("--num_workers", default=2, type=int)
+    parser.add_argument("--num_workers", default=0, type=int)
 
     parser.add_argument("--lr_start", default=1e-4, type=float)
     parser.add_argument("--lr_end", default=1e-5, type=float)
@@ -344,7 +398,7 @@ def main():
     parser.add_argument("--input_fps", default=30, type=int)
     parser.add_argument("--only_fps", default=60, type=int)
 
-    parser.add_argument("--use_flow", action="store_true", help="use bmv/fmv to build flow supervision")
+    parser.add_argument("--use_flow", default=True, type=bool)
 
     args = parser.parse_args()
     logger, log_dir = build_logger(os.path.join(args.output_dir, "logs"))
@@ -365,6 +419,8 @@ def main():
     dataset_cfg = STAIR_DATASET_CONFIG
     for cfg in iter_dataset_configs(dataset_cfg):
         if cfg.fps != args.only_fps:
+            continue
+        if cfg.difficulty != "Difficult":
             continue
         train_one_cfg(args, cfg, device, logger)
 

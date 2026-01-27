@@ -152,7 +152,7 @@ class VFIDataset(BaseDataset):
             "input": {},
             "ground_truth": {},
             "valid": row["valid"],
-            "distance_indexing": [row["D_index (mean)"], row["D_index (median)"]]
+            "distance_indexing": [row["D_index Mean"], row["D_index Median"]]
         }
 
         img_0_path = self._build_modality_path(self.record, self.mode, frame_0_idx, "colorNoScreenUI")

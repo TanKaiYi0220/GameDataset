@@ -1,5 +1,5 @@
 from datasets.dataset_loader import VFIDataset
-from datasets.dataset_config import DATASET_CONFIGS, MINOR_DATASET_CONFIGS, VFX_DATASET_CONFIGS, STAIR_DATASET_CONFIG, TEST_DATASET_CONFIGS, iter_dataset_configs
+from datasets.dataset_config import DATASET_CONFIGS, MINOR_DATASET_CONFIGS, VFX_DATASET_CONFIGS, STAIR_DATASET_CONFIG, iter_dataset_configs
 import pandas as pd
 from src.gameData_loader import load_backward_velocity, load_forward_velocity
 from src.utils import show_images_switchable, flow_to_image, save_img, save_np_array
@@ -16,16 +16,16 @@ sys.path.append('models/IFRNet')
 from tqdm import tqdm
 
 # from models.IFRNet import Model
-from models.IFRNet import Model
+from models.IFRNet_Residual import Model
 from skimage.metrics import peak_signal_noise_ratio as psnr
 from utils import warp
 
 
 ROOT_DIR = "./datasets/data/"
 # MODEL_PATH = "./models/IFRNet/checkpoints/IFRNet/IFRNet_Vimeo90K.pth"
-MODEL_PATH = "./output/IFRNet_FineTuning_Val_60/checkpoints/IFRNet/merged_fps60_Difficult/"
-OUTPUT_DIR = "./output/IFRNet_FineTuning_Val_60/checkpoints/IFRNet/merged_fps60_Difficult/inference/"
-DATASET = TEST_DATASET_CONFIGS
+MODEL_PATH = "./output/IFRNet_Residual_60/checkpoints/IFRNet/"
+OUTPUT_DIR = "./output/IFRNet_Residual_60/checkpoints/IFRNet/inference/"
+DATASET = STAIR_DATASET_CONFIG
 
 def main():
 
@@ -34,16 +34,13 @@ def main():
         if cfg.fps != 60:
             continue
 
-        # if cfg.difficulty == "Difficult":
-        #     continue
+        if cfg.difficulty != "Difficult":
+            continue
 
         # Load Model
         model = Model().cuda().eval()
-        # print(f"{MODEL_PATH}/{cfg.record}/{cfg.mode_path}/best.pth")
-        # model.load_state_dict(torch.load(f"{MODEL_PATH}/{cfg.record}/{cfg.mode_path}/best.pth"))
-        # model.load_state_dict(torch.load(f"{MODEL_PATH}/AnimeFantasyRPG_2_60/4_Difficult/4_Difficult_0/fps_60/best.pth"))
-        print(f"{MODEL_PATH}/best.pth")
-        model.load_state_dict(torch.load(f"{MODEL_PATH}/best.pth"))
+        print(f"{MODEL_PATH}/{cfg.record}/{cfg.mode_path}/best.pth")
+        model.load_state_dict(torch.load(f"{MODEL_PATH}/{cfg.record}/{cfg.mode_path}/best.pth"))
 
         df = pd.read_csv(f"{ROOT_DIR}/{cfg.record_name}_preprocessed/{cfg.mode_index}_raw_sequence_frame_index.csv")
         
@@ -94,10 +91,14 @@ def main():
                 # imgPred, up_flow0_1, up_flow1_1, up_mask_1 = model.inference(img0, img1, embt)
                 init_flow0_full = flow[:, 0:2]  # [B,2,H,W]
                 init_flow1_full = flow[:, 2:4]  # [B,2,H,W]
-                imgPred, up_flow0_1, up_flow1_1, up_mask_1 = model.inference(
+                imgPred, up_flow0_1, up_flow1_1, up_mask_1, up_res_1 = model.inference(
                     img0, img1, embt,
+                    init_flow0_full=init_flow0_full, init_flow1_full=init_flow1_full
                 )
-
+                print("flow0_1 mean", up_flow0_1.abs().mean().item(), "max", up_flow0_1.abs().max().item())
+                print("bias flow mean abs", (up_flow0_1 - init_flow0_full).abs().mean().item(), "max", (up_flow0_1 - init_flow0_full).abs().max().item())
+                print("mask saturation", ((up_mask_1 < 0.05) | (up_mask_1 > 0.95)).float().mean().item())
+                print("residual mean abs", up_res_1.abs().mean().item(), "max", up_res_1.abs().max().item())
                 # torch.cuda.synchronize()
                 # end = time.time()
                 # infer_time = end - start

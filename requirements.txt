@@ -1,6 +1,6 @@
-torch
-torchvision
-torchaudio
+# torch
+# torchvision
+# torchaudio
 numpy
 matplotlib
 scipy

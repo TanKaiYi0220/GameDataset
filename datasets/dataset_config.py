@@ -56,6 +56,27 @@ DATASET_CONFIGS = {
     }
 }
 
+TRAIN_DATASET_CONFIGS = {
+    "name": "AnimeFantasyRPG_3_Full",
+    "root_dir": "/datasets/VFI/datasets/AnimeFantasyRPG",
+    "records": {
+        "AnimeFantasyRPG_3_60": {
+            "main_indices": ["0", "1", "2"],
+            "difficulties": ["Easy", "Medium", "Difficult"],
+            "sub_index": ["2", "2", "2"],
+            "fps": [30, 60],
+            "max_index": [400, 800],  # depending on fps
+        },
+        "AnimeFantasyRPG_2_60": {
+            "main_indices": ["4"],
+            "difficulties": ["Easy", "Medium", "Difficult"],
+            "sub_index": ["2"],
+            "fps": [30, 60],
+            "max_index": [400, 800],  # depending on fps
+        }
+    }
+}
+
 VFX_DATASET_CONFIGS = {
     "name": "AnimeFantasyRPG_3_VFX",
     "root_dir": "/datasets/VFI/datasets/AnimeFantasyRPG",
@@ -78,6 +99,20 @@ STAIR_DATASET_CONFIG = {
             "main_indices": ["4"],
             "difficulties": ["Easy", "Medium", "Difficult"],
             "sub_index": ["0"],
+            "fps": [30, 60],
+            "max_index": [400, 800],  # depending on fps
+        }
+    }
+}
+
+TEST_DATASET_CONFIGS = {
+    "name": "AnimeFantasyRPG_2_STAIR",
+    "root_dir": "/datasets/VFI/datasets/AnimeFantasyRPG",
+    "records": {
+        "AnimeFantasyRPG_3_60": {
+            "main_indices": ["3"],
+            "difficulties": ["Easy", "Medium", "Difficult"],
+            "sub_index": ["2"],
             "fps": [30, 60],
             "max_index": [400, 800],  # depending on fps
         }

@@ -24,11 +24,13 @@ python src_analysis/analysis_0929.py
 
 ## Additional Packages
 ``` bash
+pip install pandas
+
 # RIFE
 pip install scikit-image    # Successfully installed imageio-2.37.0 scikit-image-0.25.2
 
 # SGM-VFI
-pip insall timm==0.9.16     # Successfully installed safetensors-0.6.2 timm-0.9.16
+pip install timm==0.9.16     # Successfully installed safetensors-0.6.2 timm-0.9.16
 
 # Sklearn
 pip install scikit-learn    # Successfully installed joblib-1.5.2 scikit-learn-1.7.2 threadpoolctl-3.6.0

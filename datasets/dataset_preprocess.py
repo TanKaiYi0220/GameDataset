@@ -2,7 +2,7 @@ import pandas as pd
 from glob import glob
 import os
 
-from dataset_config import DATASET_CONFIGS, MINOR_DATASET_CONFIGS, STAIR_DATASET_CONFIG, iter_dataset_configs
+from dataset_config import DATASET_CONFIGS, TRAIN_DATASET_CONFIGS, MINOR_DATASET_CONFIGS, STAIR_DATASET_CONFIG, TEST_DATASET_CONFIGS, iter_dataset_configs
 from remove_identical import identical_images, visualize_color_difference
 from manual_labeling import review_images
 from clipping import get_valid_continuous_segments, check_valid_in_high_fps
@@ -14,7 +14,7 @@ import sys
 sys.path.append('../')
 from datasets.utils import load_backward_velocity
 
-DATA_CONFIG = STAIR_DATASET_CONFIG
+DATA_CONFIG = TEST_DATASET_CONFIGS
 ROOT_DIR = DATA_CONFIG["root_dir"]
 
 def build_frame_index_for_mode(record, mode):
@@ -132,11 +132,11 @@ def cosine_project_ratio(array1, array2):
     return array_cos_sim
 
 if __name__ == "__main__":
-    REMOVE_IDENTICAL = False                # initial raw frame index generation with identical images removed
-    CHECK_IDENTICAL_CROSS_FPS = False       # check identical images between fps 30 and fps 60
+    REMOVE_IDENTICAL = True                # initial raw frame index generation with identical images removed
+    CHECK_IDENTICAL_CROSS_FPS = True       # check identical images between fps 30 and fps 60
     MANUAL_LABELING = False                 # manual labeling based on Medium difficulty and Easy difficulty
-    MERGE_DATASETS = False                  # merge Easy and Medium difficulties into one dataframe with global validity
-    RAW_SEQUENCE = False                    # generate sequence from 0 to MAX INDEX with valid flag
+    MERGE_DATASETS = True                  # merge Easy and Medium difficulties into one dataframe with global validity
+    RAW_SEQUENCE = True                    # generate sequence from 0 to MAX INDEX with valid flag
     LINEARITY_CHECK = True                 # check motion linearity between 2 to 0 and 1 to 0 flow by distance indexing 
 
 

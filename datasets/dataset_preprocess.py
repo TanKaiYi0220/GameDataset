@@ -2,7 +2,7 @@ import pandas as pd
 from glob import glob
 import os
 
-from dataset_config import DATASET_CONFIGS, TRAIN_DATASET_CONFIGS, MINOR_DATASET_CONFIGS, STAIR_DATASET_CONFIG, TEST_DATASET_CONFIGS, iter_dataset_configs
+from dataset_config import DATASET_CONFIGS, TRAIN_DATASET_CONFIGS, MINOR_DATASET_CONFIGS, STAIR_DATASET_CONFIG, TEST_DATASET_CONFIGS, TEST_VFX_DATASET_CONFIGS, iter_dataset_configs
 from remove_identical import identical_images, visualize_color_difference
 from manual_labeling import review_images
 from clipping import get_valid_continuous_segments, check_valid_in_high_fps
@@ -14,7 +14,7 @@ import sys
 sys.path.append('../')
 from datasets.utils import load_backward_velocity
 
-DATA_CONFIG = TEST_DATASET_CONFIGS
+DATA_CONFIG = TEST_VFX_DATASET_CONFIGS
 ROOT_DIR = DATA_CONFIG["root_dir"]
 
 def build_frame_index_for_mode(record, mode):
@@ -95,7 +95,7 @@ def check_identical_images_cross_fps(fps_30_df: pd.DataFrame, fps_60_df: pd.Data
             # Check if images are identical
             if not identical_images(img_30, img_60):
                 print(f"Non-identical frames found at fps 30 frame {current_row_30['frame_idx']} and fps 60 frame {current_row_60['frame_idx']}")
-                visualize_color_difference(img_30, img_60)
+                # visualize_color_difference(img_30, img_60)
             pbar.set_postfix({"Frame 30": current_row_30["frame_idx"], "Frame 60": current_row_60["frame_idx"]})
 
 def get_valid_clip(df: pd.DataFrame, target_frames_count: int) -> pd.DataFrame:
@@ -132,10 +132,11 @@ def cosine_project_ratio(array1, array2):
     return array_cos_sim
 
 if __name__ == "__main__":
-    REMOVE_IDENTICAL = True                # initial raw frame index generation with identical images removed
-    CHECK_IDENTICAL_CROSS_FPS = True       # check identical images between fps 30 and fps 60
+    REMOVE_IDENTICAL = False                # initial raw frame index generation with identical images removed
+    CHECK_IDENTICAL_CROSS_FPS = False       # check identical images between fps 30 and fps 60
     MANUAL_LABELING = False                 # manual labeling based on Medium difficulty and Easy difficulty
     MERGE_DATASETS = True                  # merge Easy and Medium difficulties into one dataframe with global validity
+    IGNORE_EASY = True
     RAW_SEQUENCE = True                    # generate sequence from 0 to MAX INDEX with valid flag
     LINEARITY_CHECK = True                 # check motion linearity between 2 to 0 and 1 to 0 flow by distance indexing 
 
@@ -192,18 +193,22 @@ if __name__ == "__main__":
             if cfg.difficulty != "Medium":
                 continue
 
-            easy_mode_name = cfg.mode_name.replace("Medium", "Easy")
-            easy_df = pd.read_csv(f"./data/{cfg.record_name}/{easy_mode_name}_frame_index.csv", dtype={"reason": "string"})
             medium_df = pd.read_csv(f"./data/{cfg.record_name}/{cfg.mode_name}_frame_index.csv", dtype={"reason": "string"})
+            
+            if IGNORE_EASY:
+                merged_df = medium_df.copy()
+                merged_df["global_is_valid"] = medium_df["is_valid"]
+            else:
+                easy_mode_name = cfg.mode_name.replace("Medium", "Easy")
+                easy_df = pd.read_csv(f"./data/{cfg.record_name}/{easy_mode_name}_frame_index.csv", dtype={"reason": "string"})
+                merged_df = easy_df.merge(
+                    medium_df,
+                    on=["record", "frame_idx"],
+                    how="inner",
+                    suffixes=("_easy", "_medium")
+                )
 
-            merged_df = easy_df.merge(
-                medium_df,
-                on=["record", "frame_idx"],
-                how="inner",
-                suffixes=("_easy", "_medium")
-            )
-
-            merged_df["global_is_valid"] = merged_df["is_valid_easy"] & merged_df["is_valid_medium"]
+                merged_df["global_is_valid"] = merged_df["is_valid_easy"] & merged_df["is_valid_medium"]
 
             os.makedirs(f"./data/{cfg.record_name}_preprocessed/", exist_ok=True)
             merged_df.to_csv(f"./data/{cfg.record_name}_preprocessed/{cfg.mode_index}_merged_frame_index.csv", index=False)

@@ -119,6 +119,27 @@ TEST_DATASET_CONFIGS = {
     }
 }
 
+TEST_VFX_DATASET_CONFIGS = {
+    "name": "AnimeFantasyRPG_2_STAIR",
+    "root_dir": "/datasets/VFI/datasets/AnimeFantasyRPG",
+    "records": {
+        "AnimeFantasyRPG_3_60": {
+            "main_indices": ["3"],
+            "difficulties": ["Difficult"],
+            "sub_index": ["3"],
+            "fps": [30, 60],
+            "max_index": [400, 800],  # depending on fps
+        },
+        "AnimeFantasyRPG_5_60": {
+            "main_indices": ["0", "3"],
+            "difficulties": ["Medium", "Difficult"],
+            "sub_index": ["2", "2"],
+            "fps": [30, 60],
+            "max_index": [400, 800],  # depending on fps
+        }
+    }
+}
+
 # iter function to yield DatasetConfig
 def iter_dataset_configs(config_dict: Dict[str, Any]) -> Iterable[DatasetConfig]:
     """

@@ -125,6 +125,16 @@ class VFITrainWrapper(Dataset):
             _, H, W = img0.shape
             flow = torch.zeros((4, H, W), dtype=torch.float32)
 
+        # ---- FLOW SANITY CHECK (FAIL FAST) ----
+        if not torch.isfinite(flow).all():
+            raise RuntimeError(
+                f"[FLOW INVALID] idx={real_idx}, "
+                f"has NaN/Inf in backward/forward velocity"
+            )
+
+        # optional: clamp extreme flow to avoid grid_sample OOB
+        flow = torch.clamp(flow, min=-500.0, max=500.0)
+
         return img0, imgt, img1, flow, embt, sample
 
 
@@ -395,10 +405,10 @@ def main():
     parser.add_argument("--root_dir", default="./datasets/data/", type=str)
     parser.add_argument("--dataset_root_dir", default=STAIR_DATASET_CONFIG["root_dir"], type=str)
 
-    parser.add_argument("--output_dir", default="./output/IFRNet_R_0124_90/", type=str)
+    parser.add_argument("--output_dir", default="./output/IFRNet_R_0228_60/", type=str)
     # parser.add_argument("--resume_path", default=None, type=str)
     # parser.add_argument("--resume_path", default="./models/IFRNet/checkpoints/IFRNet/IFRNet_Vimeo90K.pth", type=str)
-    parser.add_argument("--resume_path", default="./output/IFRNet_R_0124_60/checkpoints/IFRNet/merged_fps60_Difficult/best.pth", type=str)
+    parser.add_argument("--resume_path", default="./output/IFRNet_R_0228_30/checkpoints/IFRNet/merged_fps60_Difficult/best.pth", type=str)
 
 
     parser.add_argument("--epochs", default=30, type=int)
@@ -424,11 +434,16 @@ def main():
     args = parser.parse_args()
     logger, log_dir = build_logger(os.path.join(args.output_dir, "logs"))
 
+    # ---- Deterministic / Debug mode ----
     random.seed(args.split_seed)
     np.random.seed(args.split_seed)
     torch.manual_seed(args.split_seed)
     torch.cuda.manual_seed_all(args.split_seed)
-    torch.backends.cudnn.benchmark = True
+
+    torch.backends.cudnn.benchmark = False
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cuda.matmul.allow_tf32 = False
+    torch.backends.cudnn.allow_tf32 = False
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     logger.info(f"Device: {device}")

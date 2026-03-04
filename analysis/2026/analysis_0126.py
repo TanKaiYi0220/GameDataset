@@ -72,7 +72,7 @@ def parse_split_and_local_epoch(filename: str):
     return split, local_epoch
 
 
-def load_curves_for_one_cfg_all_splits(exp_parts, cfg, metric_keys, max_local_epochs=30):
+def load_curves_for_one_cfg_all_splits(exp_parts, metric_keys, max_local_epochs=30):
     """
     returns:
         epochs_by_split: dict {split: [global_epoch,...]}
@@ -132,27 +132,29 @@ def load_curves_for_one_cfg_all_splits(exp_parts, cfg, metric_keys, max_local_ep
 
 
 if __name__ == "__main__":
-    EXP_NAME = "IFRNet_R_0124"
+    EXP_NAME = "IFRNet_R_0228"
     EXP_PARTS = [
         (f"{EXP_NAME}", 0),
         (f"{EXP_NAME}_30", 30),
-        (f"{EXP_NAME}_60", 60),
     ]
 
-    ANALYSIS_DIR = f"./analysis_results/0124/{EXP_NAME}/"
+    ANALYSIS_DIR = f"./analysis_results/0202_latest/{EXP_NAME}/"
     metric_keys = ["psnr", "loss_rec", "loss_geo", "loss_dis"]
 
     for cfg in iter_dataset_configs(TEST_DATASET_CONFIGS):
         if cfg.fps != 60:
             continue
 
+        if cfg.difficulty != "Difficult":
+            continue
+
         print("[CFG]", cfg.record, cfg.mode_name)
 
         epochs_by_split, metrics_by_split, boundary_xs, boundary_labels = \
-            load_curves_for_one_cfg_all_splits(EXP_PARTS, cfg, metric_keys, max_local_epochs=30)
+            load_curves_for_one_cfg_all_splits(EXP_PARTS, metric_keys, max_local_epochs=30)
 
         # psnr
-        plot_title = f"PSNR (stitched) {cfg.record} - {cfg.mode_name} (fps={cfg.fps})"
+        plot_title = f"PSNR (stitched) (fps={cfg.fps})"
         save_path = f"{ANALYSIS_DIR}/psnr_stitched_{cfg.record}_{cfg.mode_name}_fps{cfg.fps}.png"
         plot_metric_curve_3splits(
             epochs_by_split,
@@ -165,7 +167,7 @@ if __name__ == "__main__":
         )
 
         # loss_rec
-        plot_title = f"Loss Rec (stitched) {cfg.record} - {cfg.mode_name} (fps={cfg.fps})"
+        plot_title = f"Loss Rec (stitched) (fps={cfg.fps})"
         save_path = f"{ANALYSIS_DIR}/loss_rec_stitched_{cfg.record}_{cfg.mode_name}_fps{cfg.fps}.png"
         plot_metric_curve_3splits(
             epochs_by_split,
@@ -178,7 +180,7 @@ if __name__ == "__main__":
         )
 
         # loss_geo
-        plot_title = f"Loss Geo (stitched) {cfg.record} - {cfg.mode_name} (fps={cfg.fps})"
+        plot_title = f"Loss Geo (stitched) (fps={cfg.fps})"
         save_path = f"{ANALYSIS_DIR}/loss_geo_stitched_{cfg.record}_{cfg.mode_name}_fps{cfg.fps}.png"
         plot_metric_curve_3splits(
             epochs_by_split,
@@ -191,7 +193,7 @@ if __name__ == "__main__":
         )
 
         # loss_dis
-        plot_title = f"Loss Dis (stitched) {cfg.record} - {cfg.mode_name} (fps={cfg.fps})"
+        plot_title = f"Loss Dis (stitched) (fps={cfg.fps})"
         save_path = f"{ANALYSIS_DIR}/loss_dis_stitched_{cfg.record}_{cfg.mode_name}_fps{cfg.fps}.png"
         plot_metric_curve_3splits(
             epochs_by_split,

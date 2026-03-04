@@ -23,8 +23,8 @@ from utils import warp
 
 ROOT_DIR = "./datasets/data/"
 # MODEL_PATH = "./models/IFRNet/checkpoints/IFRNet/IFRNet_Vimeo90K.pth"
-MODEL_PATH = "./output/IFRNet_FineTuning_Val_60/checkpoints/IFRNet/merged_fps60_Difficult/"
-OUTPUT_DIR = "./output/IFRNet_FineTuning_Val_60/checkpoints/IFRNet/merged_fps60_Difficult/inference/"
+MODEL_PATH = "./output/IFRNet_FineTuning_Val_2_30_latest/checkpoints/IFRNet/merged_fps60_Difficult/"
+OUTPUT_DIR = "./output/IFRNet_FineTuning_Val_2_30_latest/checkpoints/IFRNet/merged_fps60_Difficult/inference/"
 DATASET = TEST_DATASET_CONFIGS
 
 def main():

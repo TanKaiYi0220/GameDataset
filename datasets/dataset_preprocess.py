@@ -14,7 +14,7 @@ import sys
 sys.path.append('../')
 from datasets.utils import load_backward_velocity
 
-DATA_CONFIG = TEST_VFX_DATASET_CONFIGS
+DATA_CONFIG = TRAIN_DATASET_CONFIGS
 ROOT_DIR = DATA_CONFIG["root_dir"]
 
 def build_frame_index_for_mode(record, mode):
@@ -132,7 +132,7 @@ def cosine_project_ratio(array1, array2):
     return array_cos_sim
 
 if __name__ == "__main__":
-    REMOVE_IDENTICAL = False                # initial raw frame index generation with identical images removed
+    REMOVE_IDENTICAL = True                # initial raw frame index generation with identical images removed
     CHECK_IDENTICAL_CROSS_FPS = False       # check identical images between fps 30 and fps 60
     MANUAL_LABELING = False                 # manual labeling based on Medium difficulty and Easy difficulty
     MERGE_DATASETS = True                  # merge Easy and Medium difficulties into one dataframe with global validity

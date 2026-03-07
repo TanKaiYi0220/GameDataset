@@ -61,9 +61,9 @@ TRAIN_DATASET_CONFIGS = {
     "root_dir": "/datasets/VFI/datasets/AnimeFantasyRPG",
     "records": {
         "AnimeFantasyRPG_3_60": {
-            "main_indices": ["0", "1", "2"],
+            "main_indices": ["0", "1", "2", "0", "1", "2"],
             "difficulties": ["Easy", "Medium", "Difficult"],
-            "sub_index": ["2", "2", "2"],
+            "sub_index": ["2", "2", "2", "4", "4", "4"],
             "fps": [30, 60],
             "max_index": [400, 800],  # depending on fps
         },
@@ -141,48 +141,43 @@ TEST_VFX_DATASET_CONFIGS = {
 }
 
 # iter function to yield DatasetConfig
-def iter_dataset_configs(config_dict: Dict[str, Any]) -> Iterable[DatasetConfig]:
-    """
-    給 MINOR_DATASET_CONFIGS 或 DATASET_CONFIGS 都可以。
-    會 yield 出一堆 DatasetConfig。
-    """
+def iter_dataset_configs(config_dict):
     records_cfg = config_dict["records"]
 
     for record_name, rec_cfg in records_cfg.items():
-        main_indices  = rec_cfg["main_indices"]      # ["0", "1", ...]
-        difficulties  = rec_cfg["difficulties"]      # ["Easy", "Medium", ...]
-        sub_index_lst = rec_cfg["sub_index"]         # 對應 main_indices
-        fps_list      = rec_cfg["fps"]               # [30, 60]
-        max_index_lst = rec_cfg["max_index"]         # [400, 800]
 
-        # main_idx -> sub_idx
-        main_to_sub = dict(zip(main_indices, sub_index_lst))
+        main_indices  = rec_cfg["main_indices"]
+        difficulties  = rec_cfg["difficulties"]
+        sub_index_lst = rec_cfg["sub_index"]
+        fps_list      = rec_cfg["fps"]
+        max_index_lst = rec_cfg["max_index"]
 
-        # fps -> max_index
         fps_to_max = dict(zip(fps_list, max_index_lst))
 
-        # 做 main_idx × difficulty × fps 的組合
-        for main_idx, difficulty, fps in product(main_indices, difficulties, fps_list):
-            sub_idx   = main_to_sub[main_idx]
-            max_index = fps_to_max[fps]
+        # 保持 main_idx 與 sub_idx 的對應
+        for main_idx, sub_idx in zip(main_indices, sub_index_lst):
 
-            yield DatasetConfig(
-                record=record_name,
-                main_idx=main_idx,
-                difficulty=difficulty,
-                sub_idx=sub_idx,
-                fps=fps,
-                max_index=max_index,
-            )
+            for difficulty, fps in product(difficulties, fps_list):
+
+                max_index = fps_to_max[fps]
+
+                yield DatasetConfig(
+                    record=record_name,
+                    main_idx=main_idx,
+                    difficulty=difficulty,
+                    sub_idx=sub_idx,
+                    fps=fps,
+                    max_index=max_index,
+                )
 
 if __name__ == "__main__":
     # get all dataset configs
     print("All Dataset Configs:")
-    for cfg in iter_dataset_configs(DATASET_CONFIGS):
+    for cfg in iter_dataset_configs(TRAIN_DATASET_CONFIGS):
         print(cfg.mode_name)
 
     # get datasets config with filters
     print("\nFiltered Dataset Configs (fps=60, difficulty='Easy'):")
-    for cfg in iter_dataset_configs(DATASET_CONFIGS):
+    for cfg in iter_dataset_configs(TRAIN_DATASET_CONFIGS):
         if cfg.fps == 60 and cfg.difficulty == "Easy":
             print(cfg.mode_name)

@@ -387,9 +387,11 @@ def main():
     parser.add_argument("--root_dir", default="./datasets/data/", type=str)
     parser.add_argument("--dataset_root_dir", default=STAIR_DATASET_CONFIG["root_dir"], type=str)
 
-    parser.add_argument("--output_dir", default="./output/IFRNet_FineTuning_Val_60/", type=str)
+    parser.add_argument("--output_dir", default="./output/IFRNet_FineTuning_Val_0228_30/", type=str)
+    # parser.add_argument("--resume_path", default=None, type=str)
     # parser.add_argument("--resume_path", default="./models/IFRNet/checkpoints/IFRNet/IFRNet_Vimeo90K.pth", type=str)
-    parser.add_argument("--resume_path", default="./output/IFRNet_FineTuning_Val_30/checkpoints/IFRNet/merged_fps60_Difficult/best.pth", type=str)
+    parser.add_argument("--resume_path", default="./output/IFRNet_FineTuning_Val_0228/checkpoints/IFRNet/merged_fps60_Difficult/best.pth", type=str)
+    # parser.add_argument("--resume_path", default="./output/IFRNet_FineTuning_Val_2/checkpoints/IFRNet/merged_fps60_Difficult/latest.pth", type=str)
 
 
     parser.add_argument("--epochs", default=30, type=int)
@@ -419,7 +421,11 @@ def main():
     np.random.seed(args.split_seed)
     torch.manual_seed(args.split_seed)
     torch.cuda.manual_seed_all(args.split_seed)
-    torch.backends.cudnn.benchmark = True
+
+    torch.backends.cudnn.benchmark = False
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cuda.matmul.allow_tf32 = False
+    torch.backends.cudnn.allow_tf32 = False
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     logger.info(f"Device: {device}")

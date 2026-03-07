@@ -308,7 +308,7 @@ def export_all_single_videos_vfi60_timeline(
 
 
 def main():
-    model_name = "IFRNet_FineTuning_Val_2_30"  # adjust as needed
+    model_name = "IFRNet_FineTuning_Val_0228_30"  # adjust as needed
 
     parser = argparse.ArgumentParser()
     parser.add_argument(
@@ -322,7 +322,7 @@ def main():
     )
     parser.add_argument(
         "--mode", type=str, 
-        default="3_Difficult/3_Difficult_2/fps_60"
+        default="3_Difficult/3_Difficult_5/fps_60"
     )
 
     parser.add_argument("--out-dir", type=str, default="./videos")

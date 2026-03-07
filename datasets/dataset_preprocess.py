@@ -14,7 +14,7 @@ import sys
 sys.path.append('../')
 from datasets.utils import load_backward_velocity
 
-DATA_CONFIG = TRAIN_DATASET_CONFIGS
+DATA_CONFIG = TEST_VFX_DATASET_CONFIGS
 ROOT_DIR = DATA_CONFIG["root_dir"]
 
 def build_frame_index_for_mode(record, mode):

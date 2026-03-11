@@ -1,12 +1,98 @@
 import os
 from typing import Dict, Any
 
+import random
+import numpy as np
 import pandas as pd
 import torch
 from torch.utils.data import Dataset
 import cv2
 from .dataset_config import MINOR_DATASET_CONFIGS, iter_dataset_configs
 from .utils import load_backward_velocity
+
+# def random_resize(img0, imgt, img1, bmv, fmv, p=0.1):
+#     if random.uniform(0, 1) < p:
+#         img0 = cv2.resize(img0, dsize=None, fx=2.0, fy=2.0, interpolation=cv2.INTER_LINEAR)
+#         imgt = cv2.resize(imgt, dsize=None, fx=2.0, fy=2.0, interpolation=cv2.INTER_LINEAR)
+#         img1 = cv2.resize(img1, dsize=None, fx=2.0, fy=2.0, interpolation=cv2.INTER_LINEAR)
+#         bmv = cv2.resize(bmv, dsize=None, fx=2.0, fy=2.0, interpolation=cv2.INTER_LINEAR) * 2.0
+#         fmv = cv2.resize(fmv, dsize=None, fx=2.0, fy=2.0, interpolation=cv2.INTER_LINEAR) * 2.0
+#     return img0, imgt, img1, bmv, fmv
+
+
+def random_crop(img0, imgt, img1, bmv, fmv, crop_size=(224,224)):
+    h, w = crop_size
+    _, ih, iw = img0.shape
+
+    x = np.random.randint(0, ih-h+1)
+    y = np.random.randint(0, iw-w+1)
+
+    img0 = img0[:, x:x+h, y:y+w]
+    imgt = imgt[:, x:x+h, y:y+w]
+    img1 = img1[:, x:x+h, y:y+w]
+
+    bmv = bmv[:, x:x+h, y:y+w]
+    fmv = fmv[:, x:x+h, y:y+w]
+
+    return img0, imgt, img1, bmv, fmv
+
+
+def random_reverse_channel(img0, imgt, img1, bmv, fmv, p=0.5):
+    if random.uniform(0,1) < p:
+        img0 = img0[::-1, :, :]
+        imgt = imgt[::-1, :, :]
+        img1 = img1[::-1, :, :]
+
+    return img0, imgt, img1, bmv, fmv
+
+
+def random_vertical_flip(img0, imgt, img1, bmv, fmv, p=0.3):
+    if random.uniform(0,1) < p:
+        img0 = img0[:, ::-1, :]
+        imgt = imgt[:, ::-1, :]
+        img1 = img1[:, ::-1, :]
+        bmv = bmv[:, ::-1, :]
+        fmv = fmv[:, ::-1, :]
+        bmv[1] = -bmv[1]
+        fmv[1] = -fmv[1]
+
+    return img0, imgt, img1, bmv, fmv
+
+
+def random_horizontal_flip(img0, imgt, img1, bmv, fmv, p=0.5):
+    if random.uniform(0,1) < p:
+        img0 = img0[:, :, ::-1]
+        imgt = imgt[:, :, ::-1]
+        img1 = img1[:, :, ::-1]
+        bmv = bmv[:, :, ::-1]
+        fmv = fmv[:, :, ::-1]
+        bmv[0] = -bmv[0]
+        fmv[0] = -fmv[0]
+
+    return img0, imgt, img1, bmv, fmv
+
+
+def random_rotate(img0, imgt, img1, bmv, fmv, p=0.05):
+    if random.uniform(0,1) < p:
+        img0 = img0.transpose(0,2,1)
+        imgt = imgt.transpose(0,2,1)
+        img1 = img1.transpose(0,2,1)
+        bmv = bmv.transpose(0,2,1)
+        fmv = fmv.transpose(0,2,1)
+        bmv = bmv[[1,0]]
+        fmv = fmv[[1,0]]
+
+    return img0, imgt, img1, bmv, fmv
+
+
+# def random_reverse_time(img0, imgt, img1, bmv, fmv, p=0.5):
+#     if random.uniform(0, 1) < p:
+#         tmp = img1
+#         img1 = img0
+#         img0 = tmp
+#         bmv = np.concatenate((bmv[:, :, 2:4], bmv[:, :, 0:2]), 2)
+#         fmv = np.concatenate((fmv[:, :, 2:4], fmv[:, :, 0:2]), 2)
+#     return img0, imgt, img1, bmv, fmv
 
 DEFAULT_MODALITY_CONFIG = {
     "colorNoScreenUI": {
@@ -40,16 +126,12 @@ class BaseDataset(Dataset):
             self, 
             df: pd.DataFrame, 
             root_dir: str,
-            record: str,
-            mode: str,
             input_fps: int,
             modality_config = DEFAULT_MODALITY_CONFIG,
             transform=None
         ):
         self.df = df
         self.root_dir = root_dir
-        self.record = record
-        self.mode = mode
         self.df_fps = df.iloc[0]["fps"]
         self.input_fps = input_fps
         self.modality_config = modality_config
@@ -91,13 +173,20 @@ class BaseDataset(Dataset):
     
     def _load_image(self, path: str) -> torch.Tensor:
         img = cv2.imread(path, cv2.IMREAD_UNCHANGED)  # HxWxC
-        return torch.from_numpy(img).permute(2, 0, 1).unsqueeze(0).float().cuda()
+        retries_count = 0
+        while img is None:
+            img = cv2.imread(path, cv2.IMREAD_UNCHANGED)  # HxWxC
+            retries_count += 1
+            if retries_count > 5:
+                raise FileNotFoundError(f"Image read failed: {path}")
+        img = img[:, :, :3]
+        return torch.from_numpy(img.transpose(2,0,1)).float() / 255
 
     def _load_flow(self, path: str) -> torch.Tensor:
         # 你自己的 EXR loader 實作
         mv, depth = load_backward_velocity(path) 
         
-        return torch.from_numpy(mv).permute(2, 0, 1).unsqueeze(0).float().cuda()
+        return torch.from_numpy(mv).permute(2, 0, 1).float()
     
 # ------------ 核心 __getitem__ ------------
 
@@ -147,6 +236,9 @@ class VFIDataset(BaseDataset):
             frame_1_idx = row["img1"]
             frame_2_idx = row["img2"]
 
+        record = self.df.iloc[idx]["record"]
+        mode = self.df.iloc[idx]["mode"]
+
         item = {
             "frame_range": f"frame_{frame_0_idx:04d}_{frame_2_idx:04d}",
             "input": {},
@@ -155,12 +247,12 @@ class VFIDataset(BaseDataset):
             "distance_indexing": [row["D_index Mean"], row["D_index Median"]]
         }
 
-        img_0_path = self._build_modality_path(self.record, self.mode, frame_0_idx, "colorNoScreenUI")
-        img_1_path = self._build_modality_path(self.record, self.mode, frame_1_idx, "colorNoScreenUI")
-        img_2_path = self._build_modality_path(self.record, self.mode, frame_2_idx, "colorNoScreenUI")
+        img_0_path = self._build_modality_path(record, mode, frame_0_idx, "colorNoScreenUI")
+        img_1_path = self._build_modality_path(record, mode, frame_1_idx, "colorNoScreenUI")
+        img_2_path = self._build_modality_path(record, mode, frame_2_idx, "colorNoScreenUI")
 
-        bmv = self._build_modality_path(self.record, self.mode, frame_1_idx, "backwardVel_Depth")
-        fmv = self._build_modality_path(self.record, self.mode, frame_1_idx, "forwardVel_Depth")
+        bmv = self._build_modality_path(record, mode, frame_1_idx, "backwardVel_Depth")
+        fmv = self._build_modality_path(record, mode, frame_1_idx, "forwardVel_Depth")
 
         item["input"]["colorNoScreenUI"] = (img_0_path, img_2_path)
         item["ground_truth"]["backwardVel_Depth"] = bmv
@@ -169,6 +261,69 @@ class VFIDataset(BaseDataset):
 
         return item
 
+class VFITrainDataset(BaseDataset):
+    def __init__(
+        self, 
+        df: pd.DataFrame, 
+        root_dir: str,
+        input_fps: int,
+        augment: bool = True,
+        modality_config = DEFAULT_MODALITY_CONFIG,
+        transform=None
+    ):
+        super().__init__(df=df, root_dir=root_dir, input_fps=input_fps, modality_config=modality_config, transform=transform)
+        self.augment = augment
+        if self.input_fps != 30:
+            raise ValueError("VFITrainDataset only supports input_fps=30 for now")
+        
+        
+
+    def __getitem__(self, idx):
+        if self.df_fps == self.input_fps: # 60 -> 120
+            row = self.df.iloc[idx]
+            frame_0_idx = row["img0"]
+            frame_1_idx = "None"
+            frame_2_idx = row["img1"]
+        else: # 30 -> 60
+            row = self.df.iloc[idx * 2]
+            frame_0_idx = row["img0"]
+            frame_1_idx = row["img1"]
+            frame_2_idx = row["img2"]
+
+        record = self.df.iloc[idx]["record"]
+        mode = self.df.iloc[idx]["mode"]
+
+        info = {
+            "frame_range": f"frame_{frame_0_idx:04d}_{frame_2_idx:04d}",
+            "valid": row["valid"],
+            "distance_indexing": [row["D_index Mean"], row["D_index Median"]]
+        }
+
+        img_0_path = self._build_modality_path(record, mode, frame_0_idx, "colorNoScreenUI")
+        img_1_path = self._build_modality_path(record, mode, frame_1_idx, "colorNoScreenUI")
+        img_2_path = self._build_modality_path(record, mode, frame_2_idx, "colorNoScreenUI")
+
+        bmv_path = self._build_modality_path(record, mode, frame_1_idx, "backwardVel_Depth")
+        fmv_path = self._build_modality_path(record, mode, frame_1_idx, "forwardVel_Depth")
+
+        img0 = self._load_image(img_0_path)
+        imgt = self._load_image(img_1_path)
+        img1 = self._load_image(img_2_path)
+        bmv = self._load_flow(bmv_path)
+        fmv = self._load_flow(fmv_path)
+        embt = torch.from_numpy(np.array(1/2).reshape(1, 1, 1).astype(np.float32))
+
+        if self.augment:
+            # img0, imgt, img1, bmv, fmv = random_resize(img0, imgt, img1, bmv, fmv, p=0.1)
+            img0, imgt, img1, bmv, fmv = random_crop(img0, imgt, img1, bmv, fmv, crop_size=(224, 224))
+            # img0, imgt, img1, bmv, fmv = random_reverse_channel(img0, imgt, img1, bmv, fmv, p=0.5)
+            # img0, imgt, img1, bmv, fmv = random_vertical_flip(img0, imgt, img1, bmv, fmv, p=0.3)
+            # img0, imgt, img1, bmv, fmv = random_horizontal_flip(img0, imgt, img1, bmv, fmv, p=0.5)
+            # img0, imgt, img1, bmv, fmv = random_rotate(img0, imgt, img1, bmv, fmv, p=0.05)
+            # img0, imgt, img1, bmv, fmv = random_reverse_time(img0, imgt, img1, bmv, fmv, p=0.5)
+
+        return img0, imgt, img1, bmv, fmv, embt, info
+    
 if __name__ == "__main__":
     # Flow Estimation Dataset
     for cfg in iter_dataset_configs(MINOR_DATASET_CONFIGS):

@@ -95,6 +95,8 @@ def evaluate(model, loader, device):
     model.eval()
     evaluator = TaskEvaluator("VFI", VFI_METRICS)
 
+    records = []   # 新增：儲存每一筆 loss
+
     for batch in tqdm(loader, leave=False):
         img0, imgt, img1, bmv, fmv, embt, info = batch
         img0 = img0.to(device)
@@ -109,6 +111,8 @@ def evaluate(model, loader, device):
         imgt_pred, loss_rec, loss_geo, loss_dis, up_flow0_1, up_flow1_1, up_mask_1 = model(
             img0, img1, embt, imgt, flow
         )
+
+        total_loss = loss_rec + loss_geo + loss_dis
 
         B = imgt_pred.shape[0]
 
@@ -126,7 +130,26 @@ def evaluate(model, loader, device):
                 fmv=fmv[b]
             )
 
+            rec = float(loss_rec.detach().cpu())
+            geo = float(loss_geo.detach().cpu())
+            dis = float(loss_dis.detach().cpu())
+            total = float(total_loss.detach().cpu())
+
+            records.append({
+                "loss_rec": rec,
+                "loss_geo": geo,
+                "loss_dis": dis,
+                "loss_total": total
+            })
+
     df = evaluator.to_dataframe()
+
+    loss_df = pd.DataFrame(records)
+
+    # 合併 metrics + loss
+    df = pd.concat([df.reset_index(drop=True),
+                    loss_df.reset_index(drop=True)], axis=1)
+
     return df["psnr"].mean(), df
 
 # -------------------------------------------------
@@ -220,11 +243,11 @@ def main():
     parser.add_argument("--root_dir", default="./datasets/data")
     parser.add_argument("--dataset_root_dir", default=STAIR_DATASET_CONFIG["root_dir"], type=str)
 
-    parser.add_argument("--resume_epoch", default=60, type=int)
+    parser.add_argument("--resume_epoch", default=0, type=int)
     parser.add_argument("--epochs", default=90, type=int)
     # parser.add_argument("--resume_path", default=None, type=str)
-    # parser.add_argument("--resume_path", default="./models/IFRNet/checkpoints/IFRNet/IFRNet_Vimeo90K.pth", type=str)
-    parser.add_argument("--resume_path", default="./output/IFRNet_FineTuning_Small_Cropping_30/checkpoints/best.pth", type=str)
+    parser.add_argument("--resume_path", default="./models/IFRNet/checkpoints/IFRNet/IFRNet_Vimeo90K.pth", type=str)
+    # parser.add_argument("--resume_path", default="./output/IFRNet_FineTuning_Small_Cropping_30/checkpoints/best.pth", type=str)
     parser.add_argument("--eval_interval", default=1, type=int)
 
     parser.add_argument("--lr_start", default=1e-4, type=float)
@@ -234,8 +257,8 @@ def main():
 
     parser.add_argument("--seed", default=1234, type=int)
 
-    parser.add_argument("--batch_size", default=4, type=int)
-    parser.add_argument("--output_dir", default="./output/IFRNet_FineTuning_Small_Cropping_60", type=str)
+    parser.add_argument("--batch_size", default=8, type=int)
+    parser.add_argument("--output_dir", default="./output/IFRNet_FineTuning_Small_Cropping_Full", type=str)
 
 
 

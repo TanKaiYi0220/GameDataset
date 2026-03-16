@@ -89,8 +89,8 @@ def load_curves_for_one_cfg_all_splits(exp_parts, metric_keys, max_local_epochs=
     loaded_any_part = False
 
     for part_i, (exp_name, offset) in enumerate(exp_parts):
-        checkpoints_dir = f"./output/{exp_name}/checkpoints/IFRNet/"
-        epochs_dir = f"{checkpoints_dir}/merged_fps60_Difficult"
+        checkpoints_dir = f"./output/{exp_name}/checkpoints/"
+        epochs_dir = f"{checkpoints_dir}/"
 
         if not os.path.isdir(epochs_dir):
             print(f"[WARN] missing dir: {epochs_dir} (skip {exp_name})")
@@ -132,14 +132,16 @@ def load_curves_for_one_cfg_all_splits(exp_parts, metric_keys, max_local_epochs=
 
 
 if __name__ == "__main__":
-    EXP_NAME = "IFRNet_R_0228"
+    EXP_NAME = "IFRNet_FineTuning_Small_Cropping"
     EXP_PARTS = [
         (f"{EXP_NAME}", 0),
-        (f"{EXP_NAME}_30", 30),
+        (f"{EXP_NAME}_30", 0),
+        (f"{EXP_NAME}_60", 0),
     ]
 
-    ANALYSIS_DIR = f"./analysis_results/0202_latest/{EXP_NAME}/"
+    ANALYSIS_DIR = f"./analysis_results/0312_latest/{EXP_NAME}/"
     metric_keys = ["psnr", "loss_rec", "loss_geo", "loss_dis"]
+    metric_keys = ["psnr"]
 
     for cfg in iter_dataset_configs(TEST_DATASET_CONFIGS):
         if cfg.fps != 60:
@@ -166,42 +168,42 @@ if __name__ == "__main__":
             vline_labels=boundary_labels,
         )
 
-        # loss_rec
-        plot_title = f"Loss Rec (stitched) (fps={cfg.fps})"
-        save_path = f"{ANALYSIS_DIR}/loss_rec_stitched_{cfg.record}_{cfg.mode_name}_fps{cfg.fps}.png"
-        plot_metric_curve_3splits(
-            epochs_by_split,
-            {sp: metrics_by_split[sp]["loss_rec"] for sp in ["train","val","test"]},
-            plot_title,
-            "Loss Rec",
-            save_path=save_path,
-            vlines=boundary_xs,
-            vline_labels=boundary_labels,
-        )
+        # # loss_rec
+        # plot_title = f"Loss Rec (stitched) (fps={cfg.fps})"
+        # save_path = f"{ANALYSIS_DIR}/loss_rec_stitched_{cfg.record}_{cfg.mode_name}_fps{cfg.fps}.png"
+        # plot_metric_curve_3splits(
+        #     epochs_by_split,
+        #     {sp: metrics_by_split[sp]["loss_rec"] for sp in ["train","val","test"]},
+        #     plot_title,
+        #     "Loss Rec",
+        #     save_path=save_path,
+        #     vlines=boundary_xs,
+        #     vline_labels=boundary_labels,
+        # )
 
-        # loss_geo
-        plot_title = f"Loss Geo (stitched) (fps={cfg.fps})"
-        save_path = f"{ANALYSIS_DIR}/loss_geo_stitched_{cfg.record}_{cfg.mode_name}_fps{cfg.fps}.png"
-        plot_metric_curve_3splits(
-            epochs_by_split,
-            {sp: metrics_by_split[sp]["loss_geo"] for sp in ["train","val","test"]},
-            plot_title,
-            "Loss Geo",
-            save_path=save_path,
-            vlines=boundary_xs,
-            vline_labels=boundary_labels,
-        )
+        # # loss_geo
+        # plot_title = f"Loss Geo (stitched) (fps={cfg.fps})"
+        # save_path = f"{ANALYSIS_DIR}/loss_geo_stitched_{cfg.record}_{cfg.mode_name}_fps{cfg.fps}.png"
+        # plot_metric_curve_3splits(
+        #     epochs_by_split,
+        #     {sp: metrics_by_split[sp]["loss_geo"] for sp in ["train","val","test"]},
+        #     plot_title,
+        #     "Loss Geo",
+        #     save_path=save_path,
+        #     vlines=boundary_xs,
+        #     vline_labels=boundary_labels,
+        # )
 
-        # loss_dis
-        plot_title = f"Loss Dis (stitched) (fps={cfg.fps})"
-        save_path = f"{ANALYSIS_DIR}/loss_dis_stitched_{cfg.record}_{cfg.mode_name}_fps{cfg.fps}.png"
-        plot_metric_curve_3splits(
-            epochs_by_split,
-            {sp: metrics_by_split[sp]["loss_dis"] for sp in ["train","val","test"]},
-            plot_title,
-            "Loss Dis",
-            save_path=save_path,
-            vlines=boundary_xs,
-            vline_labels=boundary_labels,
-        )
+        # # loss_dis
+        # plot_title = f"Loss Dis (stitched) (fps={cfg.fps})"
+        # save_path = f"{ANALYSIS_DIR}/loss_dis_stitched_{cfg.record}_{cfg.mode_name}_fps{cfg.fps}.png"
+        # plot_metric_curve_3splits(
+        #     epochs_by_split,
+        #     {sp: metrics_by_split[sp]["loss_dis"] for sp in ["train","val","test"]},
+        #     plot_title,
+        #     "Loss Dis",
+        #     save_path=save_path,
+        #     vlines=boundary_xs,
+        #     vline_labels=boundary_labels,
+        # )
 

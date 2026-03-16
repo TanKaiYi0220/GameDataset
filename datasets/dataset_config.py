@@ -124,9 +124,9 @@ TEST_VFX_DATASET_CONFIGS = {
     "root_dir": "/datasets/VFI/datasets/AnimeFantasyRPG",
     "records": {
         "AnimeFantasyRPG_3_60": {
-            "main_indices": ["3", "3", "3"],
+            "main_indices": ["3", "3"],
             "difficulties": ["Difficult"],
-            "sub_index": ["3", "4", "5"],
+            "sub_index": ["3", "5"],
             "fps": [30, 60],
             "max_index": [400, 800],  # depending on fps
         },

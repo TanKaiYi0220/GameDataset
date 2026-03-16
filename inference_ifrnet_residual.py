@@ -1,5 +1,5 @@
 from datasets.dataset_loader import VFIDataset
-from datasets.dataset_config import DATASET_CONFIGS, MINOR_DATASET_CONFIGS, VFX_DATASET_CONFIGS, STAIR_DATASET_CONFIG, TEST_DATASET_CONFIGS, iter_dataset_configs
+from datasets.dataset_config import DATASET_CONFIGS, MINOR_DATASET_CONFIGS, VFX_DATASET_CONFIGS, STAIR_DATASET_CONFIG, TEST_DATASET_CONFIGS, TEST_VFX_DATASET_CONFIGS, iter_dataset_configs
 import pandas as pd
 from src.gameData_loader import load_backward_velocity, load_forward_velocity
 from src.utils import show_images_switchable, flow_to_image, save_img, save_np_array
@@ -23,9 +23,9 @@ from utils import warp
 
 ROOT_DIR = "./datasets/data/"
 # MODEL_PATH = "./models/IFRNet/checkpoints/IFRNet/IFRNet_Vimeo90K.pth"
-MODEL_PATH = "./output/IFRNet_R_0124/checkpoints/IFRNet/merged_fps60_Difficult/"
-OUTPUT_DIR = "./output/IFRNet_R_0124/checkpoints/IFRNet/merged_fps60_Difficult/inference/"
-DATASET = TEST_DATASET_CONFIGS
+MODEL_PATH = "./output/IFRNet_Residual_Small_Cropping_Full/checkpoints/"
+OUTPUT_DIR = "./output/IFRNet_Residual_Small_Cropping_Full/checkpoints/inference/"
+DATASET = TEST_VFX_DATASET_CONFIGS
 
 def add_colorbar_cv2(
     heatmap_bgr: np.ndarray,
@@ -201,8 +201,8 @@ def main():
         if cfg.fps != 60:
             continue
 
-        if cfg.difficulty != "Difficult":
-            continue
+        # if cfg.difficulty != "Difficult":
+        #     continue
 
         # Load Model
         model = Model().cuda().eval()
@@ -210,14 +210,14 @@ def main():
         model.load_state_dict(torch.load(f"{MODEL_PATH}/best.pth"))
 
         df = pd.read_csv(f"{ROOT_DIR}/{cfg.record_name}_preprocessed/{cfg.mode_index}_raw_sequence_frame_index.csv")
+        df["record"] = cfg.record
+        df["mode"] = cfg.mode_path
         
         vfi_evaluator = TaskEvaluator(task_name="VFI", metric_fns=VFI_METRICS)
 
         dataset = VFIDataset(
             df=df,
             root_dir=DATASET["root_dir"],
-            record=cfg.record,
-            mode=cfg.mode_path,
             input_fps=30,
         )
 
@@ -247,6 +247,17 @@ def main():
                 img1_np = cv2.imread(img1_path)
                 imgGT_np = cv2.imread(imgGT_path)
 
+                retries = 0
+                while img0_np is None or img1_np is None or imgGT_np is None:
+                    print(f"Warning: Failed to read images for sample {i} in {cfg.mode_name}. Retrying...")
+                    time.sleep(1)  # wait a bit before retrying
+                    img0_np = cv2.imread(img0_path)
+                    img1_np = cv2.imread(img1_path)
+                    imgGT_np = cv2.imread(imgGT_path)
+                    retries += 1
+                    if retries > 5:
+                        raise RuntimeError(f"Failed to read images after 5 retries for sample {i} in {cfg.mode_name}. Check file paths and integrity.")
+
                 # Inference
                 img0 = (torch.tensor(img0_np.transpose(2, 0, 1)).float() / 255.0).unsqueeze(0).cuda()
                 img1 = (torch.tensor(img1_np.transpose(2, 0, 1)).float() / 255.0).unsqueeze(0).cuda()
@@ -261,7 +272,7 @@ def main():
                 init_flow1_full = flow[:, 2:4]  # [B,2,H,W]
                 imgPred, up_flow0_1, up_flow1_1, up_mask_1, up_res_1, imgt_merge = model.inference(
                     img0, img1, embt,
-                    init_flow0_full=init_flow0_full, init_flow1_full=init_flow1_full
+                    init_flow0=init_flow0_full, init_flow1=init_flow1_full
                 )
                 # print("flow0_1 mean", up_flow0_1.abs().mean().item(), "max", up_flow0_1.abs().max().item())
                 # print("bias flow mean abs", (up_flow0_1 - init_flow0_full).abs().mean().item(), "max", (up_flow0_1 - init_flow0_full).abs().max().item())
@@ -276,14 +287,20 @@ def main():
                 imgt_merge_np = (imgt_merge[0].data.permute(1, 2, 0).cpu().numpy() * 255.0).astype(np.uint8)
                 up_flow0_1_np = flow_to_image(up_flow0_1[0].data.permute(1, 2, 0).cpu().numpy())
                 up_flow1_1_np = flow_to_image(up_flow1_1[0].data.permute(1, 2, 0).cpu().numpy())
+                bmv_np = flow_to_image(bmv[0].permute(1, 2, 0).cpu().numpy())
+                fmv_np = flow_to_image(fmv[0].permute(1, 2, 0).cpu().numpy())
                 up_mask_1_np = (up_mask_1[0, 0].data.cpu().numpy() * 255.0).astype(np.uint8)
 
                 # Warped images
                 img0_warped = warp(img0, up_flow0_1)
                 img1_warped = warp(img1, up_flow1_1)
+                img0_bmv_warped = warp(img0, bmv)
+                img1_fmv_warped = warp(img1, fmv)
 
                 img0_warped_np = img0_warped[0].data.permute(1, 2, 0).cpu().numpy() * 255.0
                 img1_warped_np = img1_warped[0].data.permute(1, 2, 0).cpu().numpy() * 255.0
+                img0_bmv_warped_np = img0_bmv_warped[0].data.permute(1, 2, 0).cpu().numpy() * 255.0
+                img1_fmv_warped_np = img1_fmv_warped[0].data.permute(1, 2, 0).cpu().numpy() * 255.0
 
                 # stores results
                 save_dir = f"{OUTPUT_DIR}/{cfg.record}/{cfg.mode_path}/{sample['frame_range']}/"
@@ -308,11 +325,15 @@ def main():
                 save_img(f"{save_dir}/image_merge.png", imgt_merge_np)
                 # save_np_array(f"{save_dir}/flow_1_to_0.npy", up_flow0_1_np)
                 # save_np_array(f"{save_dir}/flow_1_to_2.npy", up_flow1_1_np)
+                save_img(f"{save_dir}/bmv.png", bmv_np)
+                save_img(f"{save_dir}/fmv.png", fmv_np)
                 save_img(f"{save_dir}/flow_1_to_0.png", up_flow0_1_np)
                 save_img(f"{save_dir}/flow_1_to_2.png", up_flow1_1_np)
                 save_img(f"{save_dir}/flow_mask.png", up_mask_1_np)
                 save_img(f"{save_dir}/image_0_warped.png", img0_warped_np)
                 save_img(f"{save_dir}/image_1_warped.png", img1_warped_np)
+                save_img(f"{save_dir}/image_0_bmv_warped.png", img0_bmv_warped_np)
+                save_img(f"{save_dir}/image_1_fmv_warped.png", img1_fmv_warped_np)
 
                 # evaluation
                 bmv, _ = load_backward_velocity(bmv_path)

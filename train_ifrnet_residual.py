@@ -106,7 +106,7 @@ def evaluate(model, loader, device):
 
         imgt_pred, loss_rec, loss_geo, loss_dis, up_flow0_1, up_flow1_1, up_mask_1 = model(
             img0, img1, embt, imgt,
-            init_flow0=fmv, init_flow1=bmv
+            init_flow0=bmv, init_flow1=fmv
         )
 
         B = imgt_pred.shape[0]
@@ -158,7 +158,7 @@ def train(args, model, train_loader, val_loader, test_loader, device, logger):
 
             imgt_pred, loss_rec, loss_geo, loss_dis, up_flow0_1, up_flow1_1, up_mask_1 = model(
                 img0, img1, embt, imgt,
-                init_flow0=fmv, init_flow1=bmv
+                init_flow0=bmv, init_flow1=fmv
             )
 
             loss = loss_rec + loss_geo + loss_dis
@@ -231,7 +231,7 @@ def main():
 
     parser.add_argument("--seed", default=1234, type=int)
 
-    parser.add_argument("--batch_size", default=4, type=int)
+    parser.add_argument("--batch_size", default=8, type=int)
     parser.add_argument("--output_dir", default="./output/IFRNet_Residual_Small_Cropping_Full", type=str)
 
 

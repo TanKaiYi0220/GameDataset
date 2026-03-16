@@ -1,5 +1,5 @@
 from datasets.dataset_loader import VFIDataset
-from datasets.dataset_config import DATASET_CONFIGS, MINOR_DATASET_CONFIGS, VFX_DATASET_CONFIGS, STAIR_DATASET_CONFIG, TEST_DATASET_CONFIGS, iter_dataset_configs
+from datasets.dataset_config import DATASET_CONFIGS, MINOR_DATASET_CONFIGS, VFX_DATASET_CONFIGS, STAIR_DATASET_CONFIG, TEST_DATASET_CONFIGS, TEST_VFX_DATASET_CONFIGS, iter_dataset_configs
 import pandas as pd
 from src.gameData_loader import load_backward_velocity, load_forward_velocity
 from src.utils import show_images_switchable, flow_to_image, save_img, save_np_array
@@ -23,9 +23,9 @@ from utils import warp
 
 ROOT_DIR = "./datasets/data/"
 # MODEL_PATH = "./models/IFRNet/checkpoints/IFRNet/IFRNet_Vimeo90K.pth"
-MODEL_PATH = "./output/IFRNet_FineTuning_Val_2_30_latest/checkpoints/IFRNet/merged_fps60_Difficult/"
-OUTPUT_DIR = "./output/IFRNet_FineTuning_Val_2_30_latest/checkpoints/IFRNet/merged_fps60_Difficult/inference/"
-DATASET = TEST_DATASET_CONFIGS
+MODEL_PATH = "./output/IFRNet_FineTuning_Small_Cropping_60/checkpoints/"
+OUTPUT_DIR = "./output/IFRNet_FineTuning_Small_Cropping_60/checkpoints/inference/"
+DATASET = TEST_VFX_DATASET_CONFIGS
 
 def main():
 
@@ -34,8 +34,8 @@ def main():
         if cfg.fps != 60:
             continue
 
-        # if cfg.difficulty == "Difficult":
-        #     continue
+        if cfg.difficulty != "Difficult":
+            continue
 
         # Load Model
         model = Model().cuda().eval()
@@ -46,14 +46,15 @@ def main():
         model.load_state_dict(torch.load(f"{MODEL_PATH}/best.pth"))
 
         df = pd.read_csv(f"{ROOT_DIR}/{cfg.record_name}_preprocessed/{cfg.mode_index}_raw_sequence_frame_index.csv")
+        df["record"] = cfg.record
+        df["mode"] = cfg.mode_path
+
         
         vfi_evaluator = TaskEvaluator(task_name="VFI", metric_fns=VFI_METRICS)
 
         dataset = VFIDataset(
             df=df,
             root_dir=DATASET["root_dir"],
-            record=cfg.record,
-            mode=cfg.mode_path,
             input_fps=30,
         )
 

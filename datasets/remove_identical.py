@@ -24,6 +24,7 @@ def identical_images(img1: np.ndarray, img2: np.ndarray) -> bool:
         return True
 
     if difference > 48: # maximum PSNR for 8-bit images is around 48 dB
+        # visualize_color_difference(img1, img2)
         return True
     
     return False

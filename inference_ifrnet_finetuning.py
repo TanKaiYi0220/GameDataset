@@ -1,5 +1,15 @@
 from datasets.dataset_loader import VFIDataset
-from datasets.dataset_config import DATASET_CONFIGS, MINOR_DATASET_CONFIGS, VFX_DATASET_CONFIGS, STAIR_DATASET_CONFIG, TEST_DATASET_CONFIGS, TEST_VFX_DATASET_CONFIGS, iter_dataset_configs
+from datasets.dataset_config import (
+    DATASET_CONFIGS, 
+    MINOR_DATASET_CONFIGS, 
+    VFX_DATASET_CONFIGS, 
+    STAIR_DATASET_CONFIG, 
+    TEST_DATASET_CONFIGS, 
+    TEST_VFX_DATASET_CONFIGS, 
+    TEST_VFX_0326_DATASET_CONFIGS,
+    TEST_UNSEEN_VFX_0326_DATASET_CONFIGS,
+    iter_dataset_configs
+)
 import pandas as pd
 from src.gameData_loader import load_backward_velocity, load_forward_velocity
 from src.utils import show_images_switchable, flow_to_image, save_img, save_np_array
@@ -23,9 +33,9 @@ from utils import warp
 
 ROOT_DIR = "./datasets/data/"
 # MODEL_PATH = "./models/IFRNet/checkpoints/IFRNet/IFRNet_Vimeo90K.pth"
-MODEL_PATH = "./output/IFRNet_FineTuning_Small_Cropping_60/checkpoints/"
-OUTPUT_DIR = "./output/IFRNet_FineTuning_Small_Cropping_60/checkpoints/inference/"
-DATASET = TEST_VFX_DATASET_CONFIGS
+MODEL_PATH = "./output/IFRNet_FineTuning_0326/checkpoints/"
+OUTPUT_DIR = "./output/IFRNet_FineTuning_0326/checkpoints/inference/"
+DATASET = TEST_UNSEEN_VFX_0326_DATASET_CONFIGS
 
 def main():
 

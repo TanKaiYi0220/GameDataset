@@ -2,7 +2,18 @@ import pandas as pd
 from glob import glob
 import os
 
-from dataset_config import DATASET_CONFIGS, TRAIN_DATASET_CONFIGS, MINOR_DATASET_CONFIGS, STAIR_DATASET_CONFIG, TEST_DATASET_CONFIGS, TEST_VFX_DATASET_CONFIGS, iter_dataset_configs
+from dataset_config import (
+    DATASET_CONFIGS, 
+    TRAIN_DATASET_CONFIGS, 
+    MINOR_DATASET_CONFIGS, 
+    STAIR_DATASET_CONFIG, 
+    TEST_DATASET_CONFIGS, 
+    TEST_VFX_DATASET_CONFIGS,
+    TRAIN_VFX_0326_DATASET_CONFIGS, 
+    TEST_VFX_0326_DATASET_CONFIGS, 
+    TEST_UNSEEN_VFX_0326_DATASET_CONFIGS,
+    iter_dataset_configs
+)
 from remove_identical import identical_images, visualize_color_difference
 from manual_labeling import review_images
 from clipping import get_valid_continuous_segments, check_valid_in_high_fps
@@ -14,7 +25,7 @@ import sys
 sys.path.append('../')
 from datasets.utils import load_backward_velocity
 
-DATA_CONFIG = TRAIN_DATASET_CONFIGS
+DATA_CONFIG = TEST_UNSEEN_VFX_0326_DATASET_CONFIGS
 ROOT_DIR = DATA_CONFIG["root_dir"]
 
 def build_frame_index_for_mode(record, mode):
@@ -135,8 +146,9 @@ if __name__ == "__main__":
     REMOVE_IDENTICAL = True                # initial raw frame index generation with identical images removed
     CHECK_IDENTICAL_CROSS_FPS = False       # check identical images between fps 30 and fps 60
     MANUAL_LABELING = False                 # manual labeling based on Medium difficulty and Easy difficulty
-    MERGE_DATASETS = True                  # merge Easy and Medium difficulties into one dataframe with global validity
+    MERGE_DATASETS = False                  # merge Easy and Medium difficulties into one dataframe with global validity
     IGNORE_EASY = True
+    ONLY_DIFFICULT = True                  # only keep Difficult difficulty without merging with Easy
     RAW_SEQUENCE = True                    # generate sequence from 0 to MAX INDEX with valid flag
     LINEARITY_CHECK = True                 # check motion linearity between 2 to 0 and 1 to 0 flow by distance indexing 
 
@@ -144,7 +156,8 @@ if __name__ == "__main__":
     if REMOVE_IDENTICAL:
         for cfg in iter_dataset_configs(DATA_CONFIG):
             # initialize dataframe to store frame indices for each mode
-            print(f"Processing record: {cfg.record_name}, mode: {cfg.mode_name}")
+            print(ROOT_DIR)
+            print(f"Processing record: {cfg.record_name}, mode: {cfg.mode_path}")
             raw_df = build_frame_index_for_mode(cfg.record, cfg.mode_path)
             raw_df = raw_df.sort_values(by="frame_idx").reset_index(drop=True)
             print(raw_df.head())
@@ -212,11 +225,21 @@ if __name__ == "__main__":
 
             os.makedirs(f"./data/{cfg.record_name}_preprocessed/", exist_ok=True)
             merged_df.to_csv(f"./data/{cfg.record_name}_preprocessed/{cfg.mode_index}_merged_frame_index.csv", index=False)
+    elif ONLY_DIFFICULT:
+        for cfg in iter_dataset_configs(DATA_CONFIG):
+            if cfg.difficulty != "Difficult":
+                continue
+
+            df = pd.read_csv(f"./data/{cfg.record_name}/{cfg.mode_name}_frame_index.csv", dtype={"reason": "string"})
+            df["global_is_valid"] = df["is_valid"]
+
+            os.makedirs(f"./data/{cfg.record_name}_preprocessed/", exist_ok=True)
+            df.to_csv(f"./data/{cfg.record_name}_preprocessed/{cfg.mode_index}_merged_frame_index.csv", index=False)
 
     if RAW_SEQUENCE:
         for cfg in iter_dataset_configs(DATA_CONFIG):
             # only clip Medium difficulty since Easy & Medium have been merged
-            if cfg.difficulty != "Medium":
+            if cfg.difficulty != "Medium" and not ONLY_DIFFICULT:
                 continue
 
             if cfg.fps != 60:
@@ -283,7 +306,7 @@ if __name__ == "__main__":
 
     if LINEARITY_CHECK:
         for cfg in iter_dataset_configs(DATA_CONFIG):
-            if cfg.difficulty != "Medium":
+            if cfg.difficulty != "Medium" and not ONLY_DIFFICULT:
                 continue
 
             if cfg.fps != 60:

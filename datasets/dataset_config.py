@@ -140,6 +140,62 @@ TEST_VFX_DATASET_CONFIGS = {
     }
 }
 
+TRAIN_VFX_0326_DATASET_CONFIGS = {
+    "name": "AnimeFantasyRPG_2_STAIR",
+    "root_dir": "/datasets/VFI/datasets/VFI_0326/",
+    "records": {
+        "ARPG_3": {
+            "main_indices": ["0", "0", "0", "0", "1", "1", "1", "1", "2", "2", "2", "2"],
+            "difficulties": ["Difficult"],
+            "sub_index": ["0", "1", "3", "4", "0", "1", "3", "4", "0", "1", "3", "4"],
+            "fps": [30, 60],
+            "max_index": [400, 800],  # depending on fps
+        },
+        "ARPG_2": {
+            "main_indices": ["4", "4", "4", "4"],
+            "difficulties": ["Difficult"],
+            "sub_index": ["0", "1", "3", "4"],
+            "fps": [30, 60],
+            "max_index": [400, 800],  # depending on fps
+        }
+    }
+}
+
+TEST_VFX_0326_DATASET_CONFIGS = {
+    "name": "AnimeFantasyRPG_2_STAIR",
+    "root_dir": "/datasets/VFI/datasets/VFI_0326/",
+    "records": {
+        "ARPG_3": {
+            "main_indices": ["3", "3", "3", "3"],
+            "difficulties": ["Difficult"],
+            "sub_index": ["0", "1", "3", "4"],
+            "fps": [30, 60],
+            "max_index": [400, 800],  # depending on fps
+        },
+    }
+}
+
+TEST_UNSEEN_VFX_0326_DATASET_CONFIGS = {
+    "name": "AnimeFantasyRPG_2_STAIR",
+    "root_dir": "/datasets/VFI/datasets/VFI_0326/",
+    "records": {
+        "ARPG_3": {
+            "main_indices": ["0", "0", "1", "1", "2", "2", "3", "3"],
+            "difficulties": ["Difficult"],
+            "sub_index": ["2", "5", "2", "5", "2", "5", "2", "5"],
+            "fps": [30, 60],
+            "max_index": [400, 800],  # depending on fps
+        },
+        "ARPG_2": {
+            "main_indices": ["4", "4"],
+            "difficulties": ["Difficult"],
+            "sub_index": ["2", "5"],
+            "fps": [30, 60],
+            "max_index": [400, 800],  # depending on fps
+        },
+    }
+}
+
 # iter function to yield DatasetConfig
 def iter_dataset_configs(config_dict):
     records_cfg = config_dict["records"]

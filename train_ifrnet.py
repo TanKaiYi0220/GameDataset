@@ -21,6 +21,8 @@ from datasets.dataset_config import (
     TEST_DATASET_CONFIGS,
     STAIR_DATASET_CONFIG,
     VFX_DATASET_CONFIGS,
+    TRAIN_VFX_0326_DATASET_CONFIGS, 
+    TEST_VFX_0326_DATASET_CONFIGS
 )
 
 from src.gameData_loader import load_backward_velocity, load_forward_velocity
@@ -241,10 +243,10 @@ def main():
     parser = argparse.ArgumentParser()
 
     parser.add_argument("--root_dir", default="./datasets/data")
-    parser.add_argument("--dataset_root_dir", default=STAIR_DATASET_CONFIG["root_dir"], type=str)
+    parser.add_argument("--dataset_root_dir", default=TRAIN_VFX_0326_DATASET_CONFIGS["root_dir"], type=str)
 
     parser.add_argument("--resume_epoch", default=0, type=int)
-    parser.add_argument("--epochs", default=90, type=int)
+    parser.add_argument("--epochs", default=60, type=int)
     # parser.add_argument("--resume_path", default=None, type=str)
     parser.add_argument("--resume_path", default="./models/IFRNet/checkpoints/IFRNet/IFRNet_Vimeo90K.pth", type=str)
     # parser.add_argument("--resume_path", default="./output/IFRNet_FineTuning_Small_Cropping_30/checkpoints/best.pth", type=str)
@@ -258,7 +260,7 @@ def main():
     parser.add_argument("--seed", default=1234, type=int)
 
     parser.add_argument("--batch_size", default=8, type=int)
-    parser.add_argument("--output_dir", default="./output/IFRNet_FineTuning_Small_Cropping_Full", type=str)
+    parser.add_argument("--output_dir", default="./output/IFRNet_FineTuning_0326", type=str)
 
 
 
@@ -277,14 +279,14 @@ def main():
 
     merged_df = build_merged_dataframe(
         args.root_dir,
-        TRAIN_DATASET_CONFIGS,
+        TRAIN_VFX_0326_DATASET_CONFIGS,
         only_fps=60,
         logger=logger
     )
 
     test_df = build_merged_dataframe(
         args.root_dir,
-        TEST_DATASET_CONFIGS,
+        TEST_VFX_0326_DATASET_CONFIGS,
         only_fps=60,
         logger=logger
     )

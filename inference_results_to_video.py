@@ -62,7 +62,7 @@ def collect_tiles(frame_dir: Path, layout: str):
             read_bgr(frame_dir / "image_merge.png"),
             read_bgr(diff) if diff else None,
         ]
-        labels = ["img0", "img1", "gt", "pred", "merge", "Δflow overlay"]
+        labels = ["img0", "img1", "gt", "pred", "merge", "flow (1 to 0) overlay"]
         grid = (2, 3)
         return tiles, labels, grid
 
@@ -308,21 +308,21 @@ def export_all_single_videos_vfi60_timeline(
 
 
 def main():
-    model_name = "IFRNet_FineTuning_Val_2_30"  # adjust as needed
+    model_name = "IFRNet_FineTuning_0326"  # adjust as needed
 
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--root", type=str,
-        default=f"./output/{model_name}/checkpoints/IFRNet/merged_fps60_Difficult/inference/",
+        default=f"./output/{model_name}/checkpoints/inference/",
         help="Inference output root (contains record/mode/frame_range folders)"
     )
     parser.add_argument(
         "--record", type=str,
-        default="AnimeFantasyRPG_3_60",
+        default="ARPG_2",
     )
     parser.add_argument(
         "--mode", type=str, 
-        default="3_Difficult/3_Difficult_2/fps_60"
+        default="4_Difficult/4_Difficult_2/fps_60"
     )
 
     parser.add_argument("--out-dir", type=str, default="./videos")

@@ -163,7 +163,7 @@ TRAIN_VFX_0326_DATASET_CONFIGS = {
 
 TEST_VFX_0326_DATASET_CONFIGS = {
     "name": "AnimeFantasyRPG_2_STAIR",
-    "root_dir": "/datasets/VFI/datasets/VFI_0326/",
+    "root_dir": "/workspace/datasets/",
     "records": {
         "ARPG_3": {
             "main_indices": ["3", "3", "3", "3"],
@@ -177,7 +177,7 @@ TEST_VFX_0326_DATASET_CONFIGS = {
 
 TEST_UNSEEN_VFX_0326_DATASET_CONFIGS = {
     "name": "AnimeFantasyRPG_2_STAIR",
-    "root_dir": "/datasets/VFI/datasets/VFI_0326/",
+    "root_dir": "/workspace/datasets/",
     "records": {
         "ARPG_3": {
             "main_indices": ["0", "0", "1", "1", "2", "2", "3", "3"],
@@ -190,6 +190,121 @@ TEST_UNSEEN_VFX_0326_DATASET_CONFIGS = {
             "main_indices": ["4", "4"],
             "difficulties": ["Difficult"],
             "sub_index": ["2", "5"],
+            "fps": [30, 60],
+            "max_index": [400, 800],  # depending on fps
+        },
+    }
+}
+
+TEST_3D_VFX_DATASET_CONFIGS = {
+    "name": "AnimeFantasyRPG_3D_VFX",
+    "root_dir": "/workspace/datasets/",
+    # "root_dir": "/datasets/VFI/datasets/VFI_0326/",
+    "records": {
+        "ARPG_5": {
+            "main_indices": ["0", "0", "0", "1", "1", "1", "3", "3", "3", "4", "4", "4"],
+            "difficulties": ["Difficult"],
+            "sub_index": ["0", "1", "2", "0", "1", "2", "0", "1", "2", "0", "1", "2"],
+            "fps": [30, 60],
+            "max_index": [400, 800],  # depending on fps
+        },
+        "ARPG_6": {
+            "main_indices": ["0", "0", "0", "2", "2", "2", "5", "5", "5", "6", "6", "6"],
+            "difficulties": ["Difficult"],
+            "sub_index": ["0", "1", "2", "0", "1", "2", "0", "1", "2", "0", "1", "2"],
+            "fps": [30, 60],
+            "max_index": [400, 800],  # depending on fps
+        },
+        "ARPG_7": {
+            "main_indices": ["1", "1", "1", "2", "2", "2", "3", "3", "3", "6", "6", "6"],
+            "difficulties": ["Difficult"],
+            "sub_index": ["0", "1", "2", "0", "1", "2", "0", "1", "2", "0", "1", "2"],
+            "fps": [30, 60],
+            "max_index": [400, 800],  # depending on fps
+        },
+    }
+}
+
+TRAIN_VFX_0416_DATASET_CONFIGS = {
+    "name": "ARPG_2nd_Patch",
+    "root_dir": "/workspace/datasets/",
+    # "root_dir": "/datasets/VFI/datasets/VFI_0326/",
+    "records": {
+        "ARPG_3": {
+            "main_indices": ["0", "0", "0", "0", "1", "1", "1", "1", "2", "2", "2", "2"],
+            "difficulties": ["Difficult"],
+            "sub_index": ["0", "1", "3", "4", "0", "1", "3", "4", "0", "1", "3", "4"],
+            "fps": [30, 60],
+            "max_index": [400, 800],  # depending on fps
+        },
+        "ARPG_2": {
+            "main_indices": ["4", "4", "4", "4"],
+            "difficulties": ["Difficult"],
+            "sub_index": ["0", "1", "3", "4"],
+            "fps": [30, 60],
+            "max_index": [400, 800],  # depending on fps
+        },
+        "ARPG_5": {
+            "main_indices": ["0", "0", "1", "1", "4", "4"],
+            "difficulties": ["Difficult"],
+            "sub_index": ["0", "1", "0", "1", "0", "1"],
+            "fps": [30, 60],
+            "max_index": [400, 800],  # depending on fps
+        },
+        "ARPG_6": {
+            "main_indices": ["0", "0", "2", "2", "5", "5"],
+            "difficulties": ["Difficult"],
+            "sub_index": ["0", "1", "0", "1", "0", "1"],
+            "fps": [30, 60],
+            "max_index": [400, 800],  # depending on fps
+        },
+        "ARPG_7": {
+            "main_indices": ["1", "1", "2", "2"],
+            "difficulties": ["Difficult"],
+            "sub_index": ["0", "1", "0", "1"],
+            "fps": [30, 60],
+            "max_index": [400, 800],  # depending on fps
+        },
+    }
+}
+
+TEST_VFX_0416_DATASET_CONFIGS = {
+    "name": "AnimeFantasyRPG_2_STAIR",
+    "root_dir": "/workspace/datasets/",
+    # "root_dir": "/datasets/VFI/datasets/VFI_0326/",
+    "records": {
+        "ARPG_3": {
+            "main_indices": ["0", "0", "1", "1", "2", "2", "3", "3"],
+            "difficulties": ["Difficult"],
+            "sub_index": ["2", "5", "2", "5", "2", "5", "2", "5"],
+            "fps": [30, 60],
+            "max_index": [400, 800],  # depending on fps
+        },
+        "ARPG_2": {
+            "main_indices": ["4", "4"],
+            "difficulties": ["Difficult"],
+            "sub_index": ["2", "5"],
+            "fps": [30, 60],
+            "max_index": [400, 800],  # depending on fps
+        },
+        "ARPG_5": {
+            "main_indices": ["0", "1", "4", "3", "3", "3"],
+            "difficulties": ["Difficult"],
+            "sub_index": ["2", "2", "2", "0", "1", "2"],
+            "fps": [30, 60],
+            "max_index": [400, 800],  # depending on fps
+        },
+        "ARPG_6": {
+            "main_indices": ["0", "2", "5", "6", "6", "6"],
+            "difficulties": ["Difficult"],
+            "sub_index": ["2", "2", "2", "0", "1", "2"],
+            "fps": [30, 60],
+            "max_index": [400, 800],  # depending on fps
+        },
+        "ARPG_7": {
+            "main_indices": ["1", "2", "3", "3", "3", "6", "6", "6"],
+            "difficulties": ["Difficult"],
+            "sub_index": ["2", "2", "0", "1", "2", "0", "1", "2"],
             "fps": [30, 60],
             "max_index": [400, 800],  # depending on fps
         },

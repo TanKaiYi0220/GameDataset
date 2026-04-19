@@ -12,6 +12,7 @@ from dataset_config import (
     TRAIN_VFX_0326_DATASET_CONFIGS, 
     TEST_VFX_0326_DATASET_CONFIGS, 
     TEST_UNSEEN_VFX_0326_DATASET_CONFIGS,
+    TEST_3D_VFX_DATASET_CONFIGS,
     iter_dataset_configs
 )
 from remove_identical import identical_images, visualize_color_difference
@@ -25,7 +26,7 @@ import sys
 sys.path.append('../')
 from datasets.utils import load_backward_velocity
 
-DATA_CONFIG = TEST_UNSEEN_VFX_0326_DATASET_CONFIGS
+DATA_CONFIG = TEST_3D_VFX_DATASET_CONFIGS
 ROOT_DIR = DATA_CONFIG["root_dir"]
 
 def build_frame_index_for_mode(record, mode):

@@ -132,7 +132,7 @@ def load_curves_for_one_cfg_all_splits(exp_parts, metric_keys, max_local_epochs=
 
 
 if __name__ == "__main__":
-    EXP_NAME = "IFRNet_FineTuning_0326"
+    EXP_NAME = "IFRNet_FineTuning_0326_Augmentation"
     EXP_PARTS = [
         (f"{EXP_NAME}", 0),
         # (f"{EXP_NAME}_30", 0),

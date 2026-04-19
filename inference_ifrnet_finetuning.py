@@ -8,6 +8,7 @@ from datasets.dataset_config import (
     TEST_VFX_DATASET_CONFIGS, 
     TEST_VFX_0326_DATASET_CONFIGS,
     TEST_UNSEEN_VFX_0326_DATASET_CONFIGS,
+    TEST_3D_VFX_DATASET_CONFIGS,
     iter_dataset_configs
 )
 import pandas as pd
@@ -35,9 +36,22 @@ ROOT_DIR = "./datasets/data/"
 # MODEL_PATH = "./models/IFRNet/checkpoints/IFRNet/IFRNet_Vimeo90K.pth"
 MODEL_PATH = "./output/IFRNet_FineTuning_0326/checkpoints/"
 OUTPUT_DIR = "./output/IFRNet_FineTuning_0326/checkpoints/inference/"
-DATASET = TEST_UNSEEN_VFX_0326_DATASET_CONFIGS
+DATASET = TEST_3D_VFX_DATASET_CONFIGS
 
 def main():
+    # Load Model
+    model = Model().cuda().eval()
+    # print(f"{MODEL_PATH}/{cfg.record}/{cfg.mode_path}/best.pth")
+    # model.load_state_dict(torch.load(f"{MODEL_PATH}/{cfg.record}/{cfg.mode_path}/best.pth"))
+    # model.load_state_dict(torch.load(f"{MODEL_PATH}/AnimeFantasyRPG_2_60/4_Difficult/4_Difficult_0/fps_60/best.pth"))
+
+    # IFRNet Fine-Tuning Checkpoint
+    # print(f"{MODEL_PATH}/best.pth")
+    # model.load_state_dict(torch.load(f"{MODEL_PATH}/best.pth"))
+
+    # IFRNet Pre-Trained Checkpoint
+    print(f"Pre-Trained Checkpoint")
+    model.load_state_dict(torch.load(f"./models/IFRNet/checkpoints/IFRNet/IFRNet_Vimeo90K.pth"))
 
     # Load Dataset
     for cfg in iter_dataset_configs(DATASET):
@@ -47,13 +61,6 @@ def main():
         if cfg.difficulty != "Difficult":
             continue
 
-        # Load Model
-        model = Model().cuda().eval()
-        # print(f"{MODEL_PATH}/{cfg.record}/{cfg.mode_path}/best.pth")
-        # model.load_state_dict(torch.load(f"{MODEL_PATH}/{cfg.record}/{cfg.mode_path}/best.pth"))
-        # model.load_state_dict(torch.load(f"{MODEL_PATH}/AnimeFantasyRPG_2_60/4_Difficult/4_Difficult_0/fps_60/best.pth"))
-        print(f"{MODEL_PATH}/best.pth")
-        model.load_state_dict(torch.load(f"{MODEL_PATH}/best.pth"))
 
         df = pd.read_csv(f"{ROOT_DIR}/{cfg.record_name}_preprocessed/{cfg.mode_index}_raw_sequence_frame_index.csv")
         df["record"] = cfg.record
@@ -68,7 +75,7 @@ def main():
             input_fps=30,
         )
 
-        print(cfg.mode_name, len(dataset))
+        print(cfg.record, cfg.mode_name, len(dataset))
 
         with tqdm(range(len(dataset))) as pbar:
             for i in pbar:

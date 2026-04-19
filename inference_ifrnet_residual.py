@@ -205,6 +205,10 @@ def visualize_and_save_flow_diff(
     return stats
 
 def main():
+    # Load Model
+    model = Model().cuda().eval()
+    print(f"{MODEL_PATH}/best.pth")
+    model.load_state_dict(torch.load(f"{MODEL_PATH}/best.pth"))
 
     # Load Dataset
     for cfg in iter_dataset_configs(DATASET):
@@ -214,10 +218,6 @@ def main():
         # if cfg.difficulty != "Difficult":
         #     continue
 
-        # Load Model
-        model = Model().cuda().eval()
-        print(f"{MODEL_PATH}/best.pth")
-        model.load_state_dict(torch.load(f"{MODEL_PATH}/best.pth"))
 
         df = pd.read_csv(f"{ROOT_DIR}/{cfg.record_name}_preprocessed/{cfg.mode_index}_raw_sequence_frame_index.csv")
         df["record"] = cfg.record

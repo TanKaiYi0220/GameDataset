@@ -22,7 +22,9 @@ from datasets.dataset_config import (
     STAIR_DATASET_CONFIG,
     VFX_DATASET_CONFIGS,
     TRAIN_VFX_0326_DATASET_CONFIGS, 
-    TEST_VFX_0326_DATASET_CONFIGS
+    TEST_VFX_0326_DATASET_CONFIGS,
+    TRAIN_VFX_0416_DATASET_CONFIGS,
+    TEST_VFX_0416_DATASET_CONFIGS
 )
 
 from src.gameData_loader import load_backward_velocity, load_forward_velocity
@@ -158,7 +160,7 @@ def evaluate(model, loader, device):
 # Train
 # -------------------------------------------------
 
-def train(args, model, train_loader, val_loader, test_loader, device, logger):
+def train(args, model, train_loader, test_loader, device, logger):
     optimizer = optim.AdamW(model.parameters(), lr=args.lr_start, weight_decay=0)
 
     iters = 0
@@ -197,16 +199,16 @@ def train(args, model, train_loader, val_loader, test_loader, device, logger):
             iters += 1
 
         if (epoch + 1) % args.eval_interval == 0:
-            psnr, val_df = evaluate(model, val_loader, device)
-            val_df.to_csv(os.path.join(f"{args.output_dir}/checkpoints", f"val_epoch_{epoch+1}.csv"), index=False)
-            logger.info(f"Epoch {epoch+1} Validation PSNR {psnr}")
+            psnr, val_df = evaluate(model, train_loader, device)
+            val_df.to_csv(os.path.join(f"{args.output_dir}/checkpoints", f"train_epoch_{epoch+1}.csv"), index=False)
+            logger.info(f"Epoch {epoch+1} Train PSNR {psnr}")
 
             test_psnr, test_df = evaluate(model, test_loader, device)
             test_df.to_csv(os.path.join(f"{args.output_dir}/checkpoints", f"test_epoch_{epoch+1}.csv"), index=False)
             logger.info(f"Epoch {epoch+1} Test PSNR {test_psnr}")
 
-            if psnr > best_psnr:
-                best_psnr = psnr
+            if test_psnr > best_psnr:
+                best_psnr = test_psnr
                 torch.save(model.state_dict(), os.path.join(f"{args.output_dir}/checkpoints", "best.pth"))
 
 # -----------------------------
@@ -243,24 +245,24 @@ def main():
     parser = argparse.ArgumentParser()
 
     parser.add_argument("--root_dir", default="./datasets/data")
-    parser.add_argument("--dataset_root_dir", default=TRAIN_VFX_0326_DATASET_CONFIGS["root_dir"], type=str)
+    parser.add_argument("--dataset_root_dir", default=TRAIN_VFX_0416_DATASET_CONFIGS["root_dir"], type=str)
 
-    parser.add_argument("--resume_epoch", default=0, type=int)
-    parser.add_argument("--epochs", default=60, type=int)
+    parser.add_argument("--resume_epoch", default=10, type=int)
+    parser.add_argument("--epochs", default=15, type=int)
     # parser.add_argument("--resume_path", default=None, type=str)
-    parser.add_argument("--resume_path", default="./models/IFRNet/checkpoints/IFRNet/IFRNet_Vimeo90K.pth", type=str)
-    # parser.add_argument("--resume_path", default="./output/IFRNet_FineTuning_Small_Cropping_30/checkpoints/best.pth", type=str)
+    # parser.add_argument("--resume_path", default="./models/IFRNet/checkpoints/IFRNet/IFRNet_Vimeo90K.pth", type=str)
+    parser.add_argument("--resume_path", default="./output/IFRNet_FineTuning_0416/checkpoints/best.pth", type=str)
     parser.add_argument("--eval_interval", default=1, type=int)
 
     parser.add_argument("--lr_start", default=1e-4, type=float)
     parser.add_argument("--lr_end", default=1e-5, type=float)
 
-    parser.add_argument("--val_ratio", default=0.1, type=float)
+    # parser.add_argument("--val_ratio", default=0.1, type=float)
 
     parser.add_argument("--seed", default=1234, type=int)
 
     parser.add_argument("--batch_size", default=8, type=int)
-    parser.add_argument("--output_dir", default="./output/IFRNet_FineTuning_0326", type=str)
+    parser.add_argument("--output_dir", default="./output/IFRNet_FineTuning_0416_10", type=str)
 
 
 
@@ -279,14 +281,14 @@ def main():
 
     merged_df = build_merged_dataframe(
         args.root_dir,
-        TRAIN_VFX_0326_DATASET_CONFIGS,
+        TRAIN_VFX_0416_DATASET_CONFIGS,
         only_fps=60,
         logger=logger
     )
 
     test_df = build_merged_dataframe(
         args.root_dir,
-        TEST_VFX_0326_DATASET_CONFIGS,
+        TEST_VFX_0416_DATASET_CONFIGS,
         only_fps=60,
         logger=logger
     )
@@ -307,25 +309,14 @@ def main():
         input_fps=30,
     )
 
-    train_len = int(len(dataset)*(1-args.val_ratio))
-    val_len = len(dataset)-train_len
-
-    train_set, val_set = random_split(dataset,[train_len,val_len])
-
     train_loader = DataLoader(
-        train_set,
+        dataset,
         batch_size=args.batch_size,
         shuffle=False
     )
 
     args.iters_per_epoch = train_loader.__len__()
     args.iters = args.resume_epoch * args.iters_per_epoch
-
-    val_loader = DataLoader(
-        val_set,
-        batch_size=1,
-        shuffle=False
-    )
 
     test_loader = DataLoader(
         test_dataset,
@@ -343,7 +334,6 @@ def main():
         args,
         model,
         train_loader,
-        val_loader,
         test_loader,
         device,
         logger

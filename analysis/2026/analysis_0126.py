@@ -28,7 +28,8 @@ def plot_metric_curve_3splits(
     plt.figure(figsize=(10, 4))
 
     # 固定順序（想換順序自己改）
-    split_order = ["train", "val", "test"]
+    # split_order = ["train", "val", "test"]
+    split_order = ["train", "test"]
     for sp in split_order:
         if sp not in epochs_by_split or len(epochs_by_split[sp]) == 0:
             continue
@@ -132,14 +133,14 @@ def load_curves_for_one_cfg_all_splits(exp_parts, metric_keys, max_local_epochs=
 
 
 if __name__ == "__main__":
-    EXP_NAME = "IFRNet_FineTuning_0326_Augmentation"
+    EXP_NAME = "IFRNet_FineTuning_Resume_0416"
     EXP_PARTS = [
         (f"{EXP_NAME}", 0),
-        # (f"{EXP_NAME}_30", 0),
+        (f"{EXP_NAME}_10", 0),
         # (f"{EXP_NAME}_60", 0),
     ]
 
-    ANALYSIS_DIR = f"./analysis_results/0326/{EXP_NAME}/"
+    ANALYSIS_DIR = f"./analysis_results/0416_test/{EXP_NAME}/"
     metric_keys = ["psnr", "loss_total"]
     # metric_keys = ["psnr"]
 
@@ -153,14 +154,15 @@ if __name__ == "__main__":
         print("[CFG]", cfg.record, cfg.mode_name)
 
         epochs_by_split, metrics_by_split, boundary_xs, boundary_labels = \
-            load_curves_for_one_cfg_all_splits(EXP_PARTS, metric_keys, max_local_epochs=60)
+            load_curves_for_one_cfg_all_splits(EXP_PARTS, metric_keys, max_local_epochs=10)
 
         # psnr
         plot_title = f"PSNR (fps={cfg.fps})"
         save_path = f"{ANALYSIS_DIR}/psnr_{EXP_NAME}_{cfg.fps}.png"
         plot_metric_curve_3splits(
             epochs_by_split,
-            {sp: metrics_by_split[sp]["psnr"] for sp in ["train","val","test"]},
+            # {sp: metrics_by_split[sp]["psnr"] for sp in ["train","val","test"]},
+            {sp: metrics_by_split[sp]["psnr"] for sp in ["train","test"]},
             plot_title,
             "PSNR",
             save_path=save_path,
@@ -173,7 +175,8 @@ if __name__ == "__main__":
         save_path = f"{ANALYSIS_DIR}/loss_total_{EXP_NAME}_{cfg.fps}.png"
         plot_metric_curve_3splits(
             epochs_by_split,
-            {sp: metrics_by_split[sp]["loss_total"] for sp in ["train","val","test"]},
+            # {sp: metrics_by_split[sp]["loss_total"] for sp in ["train","val","test"]},
+            {sp: metrics_by_split[sp]["loss_total"] for sp in ["train","test"]},
             plot_title,
             "Loss Rec",
             save_path=save_path,

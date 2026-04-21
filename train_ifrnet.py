@@ -170,6 +170,8 @@ def train(args, model, optimizer, train_loader, test_loader, device, logger):
         model.train()
 
         pbar = tqdm(train_loader)
+        train_evaluator = TaskEvaluator("VFI", VFI_METRICS)
+        train_loss = []
 
         for batch in pbar:
             img0, imgt, img1, bmv, fmv, embt, info = batch
@@ -190,18 +192,55 @@ def train(args, model, optimizer, train_loader, test_loader, device, logger):
                 img0, img1, embt, imgt, flow
             )
 
-            loss = loss_rec + loss_geo + loss_dis
-            loss.backward()
+            total_loss = loss_rec + loss_geo + loss_dis
+            total_loss.backward()
             optimizer.step()
 
-            pbar.set_postfix(loss=f"Training Loss {loss:.6f}")
+            # Train Evaluate
+
+            B = imgt_pred.shape[0]
+
+            for b in range(B):
+                pred_np = (imgt_pred[b].permute(1,2,0).cpu().numpy()*255).astype(np.uint8)
+                gt_np = (imgt[b].permute(1,2,0).cpu().numpy()*255).astype(np.uint8)
+
+                train_evaluator.evaluate(
+                    meta={},
+                    img_gt=gt_np,
+                    img_pred=pred_np,
+                    flow_1_to_0=up_flow0_1[b],
+                    flow_1_to_2=up_flow1_1[b],
+                    bmv=bmv[b],
+                    fmv=fmv[b]
+                )
+
+                rec = float(loss_rec.detach().cpu())
+                geo = float(loss_geo.detach().cpu())
+                dis = float(loss_dis.detach().cpu())
+                total = float(total_loss.detach().cpu())
+
+                train_loss.append({
+                    "loss_rec": rec,
+                    "loss_geo": geo,
+                    "loss_dis": dis,
+                    "loss_total": total
+                })
+
+            pbar.set_postfix(loss=f"Training Loss {total_loss:.6f}")
 
             iters += 1
 
         if (epoch + 1) % args.eval_interval == 0:
-            psnr, val_df = evaluate(model, train_loader, device)
+            val_df = train_evaluator.to_dataframe()
+
+            val_loss_df = pd.DataFrame(train_loss)
+
+            # 合併 metrics + loss
+            val_df = pd.concat([val_df.reset_index(drop=True), val_loss_df.reset_index(drop=True)], axis=1)
+            val_psnr = val_df["psnr"].mean()
+
             val_df.to_csv(os.path.join(f"{args.output_dir}/checkpoints", f"train_epoch_{epoch+1}.csv"), index=False)
-            logger.info(f"Epoch {epoch+1} Train PSNR {psnr}")
+            logger.info(f"Epoch {epoch+1} Train PSNR {val_psnr}")
 
             test_psnr, test_df = evaluate(model, test_loader, device)
             test_df.to_csv(os.path.join(f"{args.output_dir}/checkpoints", f"test_epoch_{epoch+1}.csv"), index=False)

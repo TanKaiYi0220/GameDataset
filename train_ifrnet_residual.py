@@ -22,7 +22,9 @@ from datasets.dataset_config import (
     STAIR_DATASET_CONFIG,
     VFX_DATASET_CONFIGS,
     TRAIN_VFX_0326_DATASET_CONFIGS, 
-    TEST_VFX_0326_DATASET_CONFIGS
+    TEST_VFX_0326_DATASET_CONFIGS,
+    TRAIN_VFX_0416_DATASET_CONFIGS,
+    TEST_VFX_0416_DATASET_CONFIGS
 )
 
 from src.gameData_loader import load_backward_velocity, load_forward_velocity
@@ -31,7 +33,7 @@ from evaluation import TaskEvaluator, VFI_METRICS
 import sys
 sys.path.append("models/IFRNet")
 
-from models.IFRNet_Residual import Model
+from models.IFRNet import Model
 
 
 # -------------------------------------------------
@@ -57,7 +59,6 @@ def get_lr(args):
 def set_lr(optimizer, lr):
     for param_group in optimizer.param_groups:
         param_group['lr'] = lr
-
 
 # -------------------------------------------------
 # Dataset builder
@@ -99,7 +100,9 @@ def evaluate(model, loader, device):
 
     records = []   # 新增：儲存每一筆 loss
 
-    for batch in tqdm(loader, leave=False):
+    pbar = tqdm(loader)
+
+    for batch in pbar:
         img0, imgt, img1, bmv, fmv, embt, info = batch
         img0 = img0.to(device)
         img1 = img1.to(device)
@@ -107,8 +110,6 @@ def evaluate(model, loader, device):
         bmv = bmv.to(device)
         fmv = fmv.to(device)
         embt = embt.to(device)
-
-        flow = torch.cat([bmv, fmv], dim=1).float()  # [4,H,W]
 
         imgt_pred, loss_rec, loss_geo, loss_dis, up_flow0_1, up_flow1_1, up_mask_1 = model(
             img0, img1, embt, imgt,
@@ -145,6 +146,8 @@ def evaluate(model, loader, device):
                 "loss_total": total
             })
 
+            pbar.set_postfix(loss=f"Evaluate Loss {total:.6f}")
+
     df = evaluator.to_dataframe()
 
     loss_df = pd.DataFrame(records)
@@ -159,16 +162,15 @@ def evaluate(model, loader, device):
 # Train
 # -------------------------------------------------
 
-def train(args, model, train_loader, val_loader, test_loader, device, logger):
-    optimizer = optim.AdamW(model.parameters(), lr=args.lr_start, weight_decay=0)
-
+def train(args, model, optimizer, train_loader, test_loader, device, logger):
     iters = 0
-    best_psnr = 0.0
 
     for epoch in range(args.resume_epoch, args.epochs):
         model.train()
 
         pbar = tqdm(train_loader)
+        train_evaluator = TaskEvaluator("VFI", VFI_METRICS)
+        train_loss = []
 
         for batch in pbar:
             img0, imgt, img1, bmv, fmv, embt, info = batch
@@ -188,26 +190,69 @@ def train(args, model, train_loader, val_loader, test_loader, device, logger):
                 init_flow0=bmv, init_flow1=fmv
             )
 
-            loss = loss_rec + loss_geo + loss_dis
-            loss.backward()
+            total_loss = loss_rec + loss_geo + loss_dis
+            total_loss.backward()
             optimizer.step()
 
-            pbar.set_postfix(loss=float(loss))
+            # Train Evaluate
+
+            B = imgt_pred.shape[0]
+
+            for b in range(B):
+                pred_np = (imgt_pred[b].permute(1,2,0).cpu().numpy()*255).astype(np.uint8)
+                gt_np = (imgt[b].permute(1,2,0).cpu().numpy()*255).astype(np.uint8)
+
+                train_evaluator.evaluate(
+                    meta={},
+                    img_gt=gt_np,
+                    img_pred=pred_np,
+                    flow_1_to_0=up_flow0_1[b],
+                    flow_1_to_2=up_flow1_1[b],
+                    bmv=bmv[b],
+                    fmv=fmv[b]
+                )
+
+                rec = float(loss_rec.detach().cpu())
+                geo = float(loss_geo.detach().cpu())
+                dis = float(loss_dis.detach().cpu())
+                total = float(total_loss.detach().cpu())
+
+                train_loss.append({
+                    "loss_rec": rec,
+                    "loss_geo": geo,
+                    "loss_dis": dis,
+                    "loss_total": total
+                })
+
+            pbar.set_postfix(loss=f"Training Loss {total_loss:.6f}")
 
             iters += 1
 
         if (epoch + 1) % args.eval_interval == 0:
-            psnr, val_df = evaluate(model, val_loader, device)
-            val_df.to_csv(os.path.join(f"{args.output_dir}/checkpoints", f"val_epoch_{epoch+1}.csv"), index=False)
-            logger.info(f"Epoch {epoch+1} Validation PSNR {psnr}")
+            val_df = train_evaluator.to_dataframe()
+
+            val_loss_df = pd.DataFrame(train_loss)
+
+            # 合併 metrics + loss
+            val_df = pd.concat([val_df.reset_index(drop=True), val_loss_df.reset_index(drop=True)], axis=1)
+            val_psnr = val_df["psnr"].mean()
+
+            val_df.to_csv(os.path.join(f"{args.output_dir}/checkpoints", f"train_epoch_{epoch+1}.csv"), index=False)
+            logger.info(f"Epoch {epoch+1} Train PSNR {val_psnr}")
 
             test_psnr, test_df = evaluate(model, test_loader, device)
             test_df.to_csv(os.path.join(f"{args.output_dir}/checkpoints", f"test_epoch_{epoch+1}.csv"), index=False)
             logger.info(f"Epoch {epoch+1} Test PSNR {test_psnr}")
 
-            if psnr > best_psnr:
-                best_psnr = psnr
-                torch.save(model.state_dict(), os.path.join(f"{args.output_dir}/checkpoints", "best.pth"))
+            if test_psnr > args.best_psnr:
+                best_psnr = test_psnr
+                torch.save({
+                    "model": model.state_dict(),
+                    "optimizer": optimizer.state_dict(),
+                    "epoch": epoch,
+                    "best_psnr": best_psnr
+                }, "checkpoint.pth")
+                # torch.save(model.state_dict(), os.path.join(f"{args.output_dir}/checkpoints", "best.pth"))
 
 # -----------------------------
 # Logger
@@ -243,23 +288,24 @@ def main():
     parser = argparse.ArgumentParser()
 
     parser.add_argument("--root_dir", default="./datasets/data")
-    parser.add_argument("--dataset_root_dir", default=TRAIN_VFX_0326_DATASET_CONFIGS["root_dir"], type=str)
+    parser.add_argument("--dataset_root_dir", default=TRAIN_VFX_0416_DATASET_CONFIGS["root_dir"], type=str)
 
     parser.add_argument("--resume_epoch", default=0, type=int)
-    parser.add_argument("--epochs", default=100, type=int)
+    parser.add_argument("--epochs", default=30, type=int)
     parser.add_argument("--resume_path", default=None, type=str)
-    # parser.add_argument("--resume_path", default="./output/IFRNet_Residual_Small_Cropping_30/checkpoints/best.pth", type=str)
+    # parser.add_argument("--resume_path", default="./models/IFRNet/checkpoints/IFRNet/IFRNet_Vimeo90K.pth", type=str)
+    # parser.add_argument("--resume_path", default="./output/IFRNet_FineTuning_Resume_0416/checkpoints/best.pth", type=str)
     parser.add_argument("--eval_interval", default=1, type=int)
 
     parser.add_argument("--lr_start", default=1e-4, type=float)
     parser.add_argument("--lr_end", default=1e-5, type=float)
 
-    parser.add_argument("--val_ratio", default=0.1, type=float)
+    # parser.add_argument("--val_ratio", default=0.1, type=float)
 
     parser.add_argument("--seed", default=1234, type=int)
 
     parser.add_argument("--batch_size", default=8, type=int)
-    parser.add_argument("--output_dir", default="./output/IFRNet_VFX_0326", type=str)
+    parser.add_argument("--output_dir", default="./output/IFRNet_FineTuning_Resume_0416", type=str)
 
 
 
@@ -278,19 +324,21 @@ def main():
 
     merged_df = build_merged_dataframe(
         args.root_dir,
-        TRAIN_VFX_0326_DATASET_CONFIGS,
+        TRAIN_VFX_0416_DATASET_CONFIGS,
         only_fps=60,
         logger=logger
     )
 
     test_df = build_merged_dataframe(
         args.root_dir,
-        TEST_VFX_0326_DATASET_CONFIGS,
+        TEST_VFX_0416_DATASET_CONFIGS,
         only_fps=60,
         logger=logger
     )
 
     merged_df = merged_df[merged_df["valid"] == True]
+    # merged_df = merged_df[:1000]
+    # test_df = test_df[:100]
 
     dataset = VFITrainDataset(
         merged_df,
@@ -306,43 +354,46 @@ def main():
         input_fps=30,
     )
 
-    train_len = int(len(dataset)*(1-args.val_ratio))
-    val_len = len(dataset)-train_len
-
-    train_set, val_set = random_split(dataset,[train_len,val_len])
-
     train_loader = DataLoader(
-        train_set,
+        dataset,
         batch_size=args.batch_size,
-        shuffle=False
+        shuffle=True
     )
 
     args.iters_per_epoch = train_loader.__len__()
     args.iters = args.resume_epoch * args.iters_per_epoch
 
-    val_loader = DataLoader(
-        val_set,
-        batch_size=1,
-        shuffle=False
-    )
-
     test_loader = DataLoader(
         test_dataset,
         batch_size=1,
-        shuffle=False
+        shuffle=True
     )
 
     model = Model().to(device)
+    optimizer = optim.AdamW(model.parameters(), lr=args.lr_start, weight_decay=0)
+    args.best_psnr = 0.0
 
     if args.resume_path is not None and os.path.isfile(args.resume_path):
+        print(f"Resume checkpoint from {args.resume_path}")
+        ckpt = torch.load(args.resume_path)
+
+        model.load_state_dict(ckpt["model"])
+        optimizer.load_state_dict(ckpt["optimizer"])
+
+        args.resume_epoch = ckpt["epoch"] + 1
+        args.best_psnr = ckpt["best_psnr"]
+
         model.load_state_dict(torch.load(args.resume_path))
         logger.info(f"Resumed from {args.resume_path}")
+    else:
+        print(f"Resume checkpoint from ./models/IFRNet/checkpoints/IFRNet/IFRNet_Vimeo90K.pth")
+        model.load_state_dict(torch.load("./models/IFRNet/checkpoints/IFRNet/IFRNet_Vimeo90K.pth"))
 
     train(
         args,
         model,
+        optimizer,
         train_loader,
-        val_loader,
         test_loader,
         device,
         logger

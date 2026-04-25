@@ -136,11 +136,11 @@ if __name__ == "__main__":
     EXP_NAME = "IFRNet_FineTuning_Resume_0416"
     EXP_PARTS = [
         (f"{EXP_NAME}", 0),
-        (f"{EXP_NAME}_10", 0),
+        # (f"{EXP_NAME}_10", 0),
         # (f"{EXP_NAME}_60", 0),
     ]
 
-    ANALYSIS_DIR = f"./analysis_results/0416_test/{EXP_NAME}/"
+    ANALYSIS_DIR = f"./analysis_results/0416_FineTuning/{EXP_NAME}/"
     metric_keys = ["psnr", "loss_total"]
     # metric_keys = ["psnr"]
 
@@ -154,7 +154,7 @@ if __name__ == "__main__":
         print("[CFG]", cfg.record, cfg.mode_name)
 
         epochs_by_split, metrics_by_split, boundary_xs, boundary_labels = \
-            load_curves_for_one_cfg_all_splits(EXP_PARTS, metric_keys, max_local_epochs=10)
+            load_curves_for_one_cfg_all_splits(EXP_PARTS, metric_keys, max_local_epochs=30)
 
         # psnr
         plot_title = f"PSNR (fps={cfg.fps})"

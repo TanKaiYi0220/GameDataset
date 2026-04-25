@@ -325,6 +325,92 @@ class VFITrainDataset(BaseDataset):
 
         return img0, imgt, img1, bmv, fmv, embt, info
     
+class FlowEstimationTrainDataset(BaseDataset):
+    def __init__(
+        self, 
+        df: pd.DataFrame, 
+        root_dir: str,
+        input_fps: int,
+        augment: bool = True,
+        modality_config = DEFAULT_MODALITY_CONFIG,
+        transform=None
+    ):
+        super().__init__(df=df, root_dir=root_dir, input_fps=input_fps, modality_config=modality_config, transform=transform)
+        self.augment = augment
+        if self.input_fps != 30:
+            raise ValueError("VFITrainDataset only supports input_fps=30 for now")
+        
+        
+
+    def __getitem__(self, idx):
+        if self.df_fps == self.input_fps: # 60 -> 60
+            raise NotImplementedError("120 fps still not ready")
+        else: # 30 -> 60
+            row = self.df.iloc[idx * 2]
+            frame_30_0_idx = row["img0"] // 2
+            frame_30_1_idx = row["img2"] // 2
+            frame_60_0_idx = row["img0"]
+            frame_60_1_idx = row["img1"]
+            frame_60_2_idx = row["img2"]
+
+        record = self.df.iloc[idx]["record"]
+        mode = self.df.iloc[idx]["mode"]
+
+        info = {
+            "frame_range_60": f"frame_60_0_idx_{frame_60_0_idx:04d}_{frame_60_2_idx:04d}",
+            "frame_range_30": f"frame_30_0_idx_{frame_30_0_idx:04d}_{frame_30_1_idx:04d}",
+            "valid": row["valid"],
+            "distance_indexing": [row["D_index Mean"], row["D_index Median"]]
+        }
+
+        img_60_0_path = self._build_modality_path(record, mode, frame_60_0_idx, "colorNoScreenUI")
+        img_60_1_path = self._build_modality_path(record, mode, frame_60_1_idx, "colorNoScreenUI")
+        img_60_2_path = self._build_modality_path(record, mode, frame_60_2_idx, "colorNoScreenUI")
+
+        bmv_60_path = self._build_modality_path(record, mode, frame_60_1_idx, "backwardVel_Depth")
+        fmv_60_path = self._build_modality_path(record, mode, frame_60_1_idx, "forwardVel_Depth")
+
+        bmv_30_path = self._build_modality_path(record, mode.replace("fps_60", "fps_30"), frame_30_1_idx, "backwardVel_Depth")
+        fmv_30_path = self._build_modality_path(record, mode.replace("fps_60", "fps_30"), frame_30_0_idx, "forwardVel_Depth")
+        img_30_0_path = self._build_modality_path(record, mode.replace("fps_60", "fps_30"), frame_30_0_idx, "colorNoScreenUI")
+        img_30_1_path = self._build_modality_path(record, mode.replace("fps_60", "fps_30"), frame_30_1_idx, "colorNoScreenUI")
+
+        info["img_60_2_path"] = img_60_2_path
+        info["img_30_1_path"] = img_30_1_path
+
+        img0 = self._load_image(img_60_0_path)
+        imgt = self._load_image(img_60_1_path)
+        img1 = self._load_image(img_60_2_path)
+        bmv_60 = self._load_flow(bmv_60_path)
+        fmv_60 = self._load_flow(fmv_60_path)
+        bmv_30 = self._load_flow(bmv_30_path)
+        fmv_30 = self._load_flow(fmv_30_path)
+        img0_30 = self._load_image(img_30_0_path)
+        img1_30 = self._load_image(img_30_1_path)
+
+        if self.augment:
+            # img0, imgt, img1, bmv, fmv = random_resize(img0, imgt, img1, bmv, fmv, p=0.1)
+            # img0, imgt, img1, bmv, fmv = random_crop(img0, imgt, img1, bmv, fmv, crop_size=(224, 224))
+            # img0, imgt, img1, bmv, fmv = random_reverse_channel(img0, imgt, img1, bmv, fmv, p=0.5)
+            # img0, imgt, img1, bmv, fmv = random_vertical_flip(img0, imgt, img1, bmv, fmv, p=0.3)
+            # img0, imgt, img1, bmv, fmv = random_horizontal_flip(img0, imgt, img1, bmv, fmv, p=0.5)
+            # img0, imgt, img1, bmv, fmv = random_rotate(img0, imgt, img1, bmv, fmv, p=0.05)
+            # img0, imgt, img1, bmv, fmv = random_reverse_time(img0, imgt, img1, bmv, fmv, p=0.5)
+            pass
+            
+        img0 = torch.from_numpy(img0.transpose(2, 0, 1).astype(np.float32) / 255.0)
+        imgt = torch.from_numpy(imgt.transpose(2, 0, 1).astype(np.float32) / 255.0)
+        img1 = torch.from_numpy(img1.transpose(2, 0, 1).astype(np.float32) / 255.0)
+        bmv_60 = torch.from_numpy(bmv_60.transpose(2, 0, 1).astype(np.float32))
+        fmv_60 = torch.from_numpy(fmv_60.transpose(2, 0, 1).astype(np.float32))
+        bmv_30 = torch.from_numpy(bmv_30.transpose(2, 0, 1).astype(np.float32))
+        fmv_30 = torch.from_numpy(fmv_30.transpose(2, 0, 1).astype(np.float32))
+        img0_30 = torch.from_numpy(img0_30.transpose(2, 0, 1).astype(np.float32) / 255.0)
+        img1_30 = torch.from_numpy(img1_30.transpose(2, 0, 1).astype(np.float32) / 255.0)
+        embt = torch.from_numpy(np.array(1/2).reshape(1, 1, 1).astype(np.float32))
+
+        return img0, imgt, img1, bmv_60, fmv_60, bmv_30, fmv_30, img0_30, img1_30, embt, info
+    
 if __name__ == "__main__":
     # Flow Estimation Dataset
     for cfg in iter_dataset_configs(MINOR_DATASET_CONFIGS):

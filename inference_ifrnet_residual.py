@@ -8,6 +8,8 @@ from datasets.dataset_config import (
     TEST_VFX_DATASET_CONFIGS,
     TEST_VFX_0326_DATASET_CONFIGS, 
     TEST_UNSEEN_VFX_0326_DATASET_CONFIGS,
+    TRAIN_VFX_0416_DATASET_CONFIGS,
+    TEST_VFX_0416_DATASET_CONFIGS,
     iter_dataset_configs
 )
 import pandas as pd
@@ -35,7 +37,7 @@ ROOT_DIR = "./datasets/data/"
 # MODEL_PATH = "./models/IFRNet/checkpoints/IFRNet/IFRNet_Vimeo90K.pth"
 MODEL_PATH = "./output/IFRNet_VFX_0326/checkpoints/"
 OUTPUT_DIR = "./output/IFRNet_VFX_0326/checkpoints/inference/"
-DATASET = TEST_UNSEEN_VFX_0326_DATASET_CONFIGS
+DATASET = TRAIN_VFX_0416_DATASET_CONFIGS
 
 def add_colorbar_cv2(
     heatmap_bgr: np.ndarray,

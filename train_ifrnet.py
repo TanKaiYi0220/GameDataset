@@ -201,8 +201,8 @@ def train(args, model, optimizer, train_loader, test_loader, device, logger):
             B = imgt_pred.shape[0]
 
             for b in range(B):
-                pred_np = (imgt_pred[b].permute(1,2,0).cpu().numpy()*255).astype(np.uint8)
-                gt_np = (imgt[b].permute(1,2,0).cpu().numpy()*255).astype(np.uint8)
+                pred_np = (imgt_pred[b].detach().permute(1,2,0).cpu().numpy()*255).astype(np.uint8)
+                gt_np = (imgt[b].detach().permute(1,2,0).cpu().numpy()*255).astype(np.uint8)
 
                 train_evaluator.evaluate(
                     meta={},
@@ -253,7 +253,7 @@ def train(args, model, optimizer, train_loader, test_loader, device, logger):
                     "optimizer": optimizer.state_dict(),
                     "epoch": epoch,
                     "best_psnr": best_psnr
-                }, "checkpoint.pth")
+                }, os.path.join(f"{args.output_dir}/checkpoints", "best.pth"))
                 # torch.save(model.state_dict(), os.path.join(f"{args.output_dir}/checkpoints", "best.pth"))
 
 # -----------------------------
@@ -292,11 +292,11 @@ def main():
     parser.add_argument("--root_dir", default="./datasets/data")
     parser.add_argument("--dataset_root_dir", default=TRAIN_VFX_0416_DATASET_CONFIGS["root_dir"], type=str)
 
-    parser.add_argument("--resume_epoch", default=0, type=int)
-    parser.add_argument("--epochs", default=30, type=int)
-    parser.add_argument("--resume_path", default=None, type=str)
+    parser.add_argument("--resume_epoch", default=30, type=int)
+    parser.add_argument("--epochs", default=60, type=int)
+    # parser.add_argument("--resume_path", default=None, type=str)
     # parser.add_argument("--resume_path", default="./models/IFRNet/checkpoints/IFRNet/IFRNet_Vimeo90K.pth", type=str)
-    # parser.add_argument("--resume_path", default="./output/IFRNet_FineTuning_Resume_0416/checkpoints/best.pth", type=str)
+    parser.add_argument("--resume_path", default="./output/IFRNet_FineTuning_Resume_0416/checkpoints/best.pth", type=str)
     parser.add_argument("--eval_interval", default=1, type=int)
 
     parser.add_argument("--lr_start", default=1e-4, type=float)
@@ -307,7 +307,7 @@ def main():
     parser.add_argument("--seed", default=1234, type=int)
 
     parser.add_argument("--batch_size", default=8, type=int)
-    parser.add_argument("--output_dir", default="./output/IFRNet_FineTuning_Resume_0416", type=str)
+    parser.add_argument("--output_dir", default="./output/IFRNet_FineTuning_Resume_0416_30", type=str)
 
 
 
@@ -385,7 +385,7 @@ def main():
         args.resume_epoch = ckpt["epoch"] + 1
         args.best_psnr = ckpt["best_psnr"]
 
-        model.load_state_dict(torch.load(args.resume_path))
+        # model.load_state_dict(torch.load(args.resume_path))
         logger.info(f"Resumed from {args.resume_path}")
     else:
         print(f"Resume checkpoint from ./models/IFRNet/checkpoints/IFRNet/IFRNet_Vimeo90K.pth")

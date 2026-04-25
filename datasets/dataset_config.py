@@ -270,8 +270,8 @@ TRAIN_VFX_0416_DATASET_CONFIGS = {
 
 TEST_VFX_0416_DATASET_CONFIGS = {
     "name": "AnimeFantasyRPG_2_STAIR",
-    "root_dir": "/workspace/datasets/",
-    # "root_dir": "/datasets/VFI/datasets/VFI_0326/",
+    # "root_dir": "/workspace/datasets/",
+    "root_dir": "/datasets/VFI/datasets/VFI_0326/",
     "records": {
         "ARPG_3": {
             "main_indices": ["0", "0", "1", "1", "2", "2", "3", "3"],

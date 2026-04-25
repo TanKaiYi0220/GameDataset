@@ -251,7 +251,7 @@ def train(args, model, optimizer, train_loader, test_loader, device, logger):
                     "optimizer": optimizer.state_dict(),
                     "epoch": epoch,
                     "best_psnr": best_psnr
-                }, "checkpoint.pth")
+                }, os.path.join(f"{args.output_dir}/checkpoints", "best.pth"))
                 # torch.save(model.state_dict(), os.path.join(f"{args.output_dir}/checkpoints", "best.pth"))
 
 # -----------------------------

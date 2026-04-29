@@ -33,7 +33,7 @@ from evaluation import TaskEvaluator, VFI_METRICS
 import sys
 sys.path.append("models/IFRNet")
 
-from models.IFRNet import Model
+from models.IFRNet_Residual import Model
 
 
 # -------------------------------------------------
@@ -164,6 +164,7 @@ def evaluate(model, loader, device):
 
 def train(args, model, optimizer, train_loader, test_loader, device, logger):
     iters = 0
+    best_psnr = args.best_psnr
 
     for epoch in range(args.resume_epoch, args.epochs):
         model.train()
@@ -199,8 +200,8 @@ def train(args, model, optimizer, train_loader, test_loader, device, logger):
             B = imgt_pred.shape[0]
 
             for b in range(B):
-                pred_np = (imgt_pred[b].permute(1,2,0).cpu().numpy()*255).astype(np.uint8)
-                gt_np = (imgt[b].permute(1,2,0).cpu().numpy()*255).astype(np.uint8)
+                pred_np = (imgt_pred[b].detach().permute(1,2,0).cpu().numpy()*255).astype(np.uint8)
+                gt_np = (imgt[b].detach().permute(1,2,0).cpu().numpy()*255).astype(np.uint8)
 
                 train_evaluator.evaluate(
                     meta={},
@@ -244,7 +245,7 @@ def train(args, model, optimizer, train_loader, test_loader, device, logger):
             test_df.to_csv(os.path.join(f"{args.output_dir}/checkpoints", f"test_epoch_{epoch+1}.csv"), index=False)
             logger.info(f"Epoch {epoch+1} Test PSNR {test_psnr}")
 
-            if test_psnr > args.best_psnr:
+            if test_psnr > best_psnr:
                 best_psnr = test_psnr
                 torch.save({
                     "model": model.state_dict(),
@@ -253,6 +254,13 @@ def train(args, model, optimizer, train_loader, test_loader, device, logger):
                     "best_psnr": best_psnr
                 }, os.path.join(f"{args.output_dir}/checkpoints", "best.pth"))
                 # torch.save(model.state_dict(), os.path.join(f"{args.output_dir}/checkpoints", "best.pth"))
+
+        torch.save({
+            "model": model.state_dict(),
+            "optimizer": optimizer.state_dict(),
+            "epoch": epoch,
+            "best_psnr": best_psnr
+        }, os.path.join(f"{args.output_dir}/checkpoints", "latest.pth"))
 
 # -----------------------------
 # Logger
@@ -291,7 +299,7 @@ def main():
     parser.add_argument("--dataset_root_dir", default=TRAIN_VFX_0416_DATASET_CONFIGS["root_dir"], type=str)
 
     parser.add_argument("--resume_epoch", default=0, type=int)
-    parser.add_argument("--epochs", default=30, type=int)
+    parser.add_argument("--epochs", default=60, type=int)
     parser.add_argument("--resume_path", default=None, type=str)
     # parser.add_argument("--resume_path", default="./models/IFRNet/checkpoints/IFRNet/IFRNet_Vimeo90K.pth", type=str)
     # parser.add_argument("--resume_path", default="./output/IFRNet_FineTuning_Resume_0416/checkpoints/best.pth", type=str)
@@ -305,11 +313,10 @@ def main():
     parser.add_argument("--seed", default=1234, type=int)
 
     parser.add_argument("--batch_size", default=8, type=int)
-    parser.add_argument("--output_dir", default="./output/IFRNet_FineTuning_Resume_0416", type=str)
-
-
+    parser.add_argument("--output_dir", default="./output/IFRNet_Residual_Resume_0416_10", type=str)
 
     args = parser.parse_args()
+    args.resume_path = "./output/IFRNet_Residual_Resume_0416/checkpoints/latest.pth"
 
     os.makedirs(args.output_dir, exist_ok=True)
     os.makedirs(os.path.join(args.output_dir, "checkpoints"), exist_ok=True)
@@ -360,8 +367,6 @@ def main():
         shuffle=True
     )
 
-    args.iters_per_epoch = train_loader.__len__()
-    args.iters = args.resume_epoch * args.iters_per_epoch
 
     test_loader = DataLoader(
         test_dataset,
@@ -374,7 +379,6 @@ def main():
     args.best_psnr = 0.0
 
     if args.resume_path is not None and os.path.isfile(args.resume_path):
-        print(f"Resume checkpoint from {args.resume_path}")
         ckpt = torch.load(args.resume_path)
 
         model.load_state_dict(ckpt["model"])
@@ -383,11 +387,14 @@ def main():
         args.resume_epoch = ckpt["epoch"] + 1
         args.best_psnr = ckpt["best_psnr"]
 
-        model.load_state_dict(torch.load(args.resume_path))
-        logger.info(f"Resumed from {args.resume_path}")
+        logger.info(f"Resumed from {args.resume_path}\nStart from Epoch {args.resume_epoch}")
     else:
-        print(f"Resume checkpoint from ./models/IFRNet/checkpoints/IFRNet/IFRNet_Vimeo90K.pth")
-        model.load_state_dict(torch.load("./models/IFRNet/checkpoints/IFRNet/IFRNet_Vimeo90K.pth"))
+        print(f"Train From Scratch")
+        # model.load_state_dict(torch.load("./models/IFRNet/checkpoints/IFRNet/IFRNet_Vimeo90K.pth"))
+        pass
+
+    args.iters_per_epoch = train_loader.__len__()
+    args.iters = args.resume_epoch * args.iters_per_epoch
 
     train(
         args,

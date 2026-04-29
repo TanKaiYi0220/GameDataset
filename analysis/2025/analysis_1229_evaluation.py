@@ -11,8 +11,6 @@ import numpy as np
 import os
 import time
 
-import sys
-sys.path.append('models/IFRNet')
 from tqdm import tqdm
 
 # from models.IFRNet import Model

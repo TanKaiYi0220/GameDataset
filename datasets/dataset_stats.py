@@ -5,8 +5,6 @@ import numpy as np
 from typing import Optional, Sequence, Tuple, Dict, List, Any
 import matplotlib.pyplot as plt
 
-import sys
-sys.path.append('../')
 from datasets.utils import load_backward_velocity
 from datasets.dataset_loader import VFIDataset
 from datasets.dataset_config import DATASET_CONFIGS, MINOR_DATASET_CONFIGS, VFX_DATASET_CONFIGS, STAIR_DATASET_CONFIG, iter_dataset_configs

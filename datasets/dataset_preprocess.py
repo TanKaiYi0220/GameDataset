@@ -2,7 +2,7 @@ import pandas as pd
 from glob import glob
 import os
 
-from dataset_config import (
+from datasets.dataset_config import (
     DATASET_CONFIGS, 
     TRAIN_DATASET_CONFIGS, 
     MINOR_DATASET_CONFIGS, 
@@ -15,16 +15,12 @@ from dataset_config import (
     TEST_3D_VFX_DATASET_CONFIGS,
     iter_dataset_configs
 )
-from remove_identical import identical_images, visualize_color_difference
-from manual_labeling import review_images
-from clipping import get_valid_continuous_segments, check_valid_in_high_fps
-from utils import loadPNG
+from datasets.remove_identical import identical_images, visualize_color_difference
+from datasets.manual_labeling import review_images
+from datasets.clipping import get_valid_continuous_segments, check_valid_in_high_fps
+from datasets.utils import loadPNG, load_backward_velocity
 from tqdm import tqdm
 import numpy as np
-
-import sys
-sys.path.append('../')
-from datasets.utils import load_backward_velocity
 
 DATA_CONFIG = TEST_3D_VFX_DATASET_CONFIGS
 ROOT_DIR = DATA_CONFIG["root_dir"]

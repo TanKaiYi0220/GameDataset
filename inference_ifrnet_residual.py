@@ -24,11 +24,8 @@ import numpy as np
 import os
 import time
 
-import sys
-sys.path.append('models/IFRNet')
 from tqdm import tqdm
 
-# from models.IFRNet import Model
 from models.IFRNet_Residual import Model
 from skimage.metrics import peak_signal_noise_ratio as psnr
 from utils import warp

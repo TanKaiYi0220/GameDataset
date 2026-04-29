@@ -30,9 +30,6 @@ from datasets.dataset_config import (
 from src.gameData_loader import load_backward_velocity, load_forward_velocity
 from evaluation import TaskEvaluator, VFI_METRICS
 
-import sys
-sys.path.append("models/IFRNet")
-
 from models.IFRNet import Model
 
 

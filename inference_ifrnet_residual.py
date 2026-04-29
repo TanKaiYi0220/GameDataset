@@ -16,6 +16,7 @@ import pandas as pd
 from src.gameData_loader import load_backward_velocity, load_forward_velocity
 from src.utils import show_images_switchable, flow_to_image, save_img, save_np_array
 from evaluation import TaskEvaluator, VFI_METRICS
+from config.config import get_config
 
 import cv2
 import torch
@@ -33,10 +34,10 @@ from skimage.metrics import peak_signal_noise_ratio as psnr
 from utils import warp
 
 
-ROOT_DIR = "./datasets/data/"
+ROOT_DIR = get_config("data_root", "./datasets/data")
 # MODEL_PATH = "./models/IFRNet/checkpoints/IFRNet/IFRNet_Vimeo90K.pth"
-MODEL_PATH = "./output/IFRNet_VFX_0326/checkpoints/"
-OUTPUT_DIR = "./output/IFRNet_VFX_0326/checkpoints/inference/"
+MODEL_PATH = os.path.join(get_config("output_root", "./output"), "IFRNet_VFX_0326", "checkpoints")
+OUTPUT_DIR = os.path.join(get_config("output_root", "./output"), "IFRNet_VFX_0326", "checkpoints", "inference")
 DATASET = TRAIN_VFX_0416_DATASET_CONFIGS
 
 def add_colorbar_cv2(

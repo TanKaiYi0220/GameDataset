@@ -2,6 +2,12 @@ from dataclasses import dataclass
 from itertools import product
 from typing import Iterable, Dict, Any
 
+from config.config import get_config
+
+DEFAULT_DATASET_ROOT = get_config("dataset_root", "/workspace/datasets")
+DEFAULT_VFI_ROOT = get_config("vfi_dataset_root", "/datasets/VFI/datasets")
+DEFAULT_WORKSPACE_ROOT = get_config("workspace_datasets_root", "/workspace/datasets")
+
 @dataclass
 class DatasetConfig:
     record: str       # AnimeFantasyRPG_3_60
@@ -30,7 +36,7 @@ class DatasetConfig:
 # ------------------------------ USUAL CONFIG TO USED ------------------------------
 MINOR_DATASET_CONFIGS = {
     "name": "AnimeFantasyRPG_3",
-    "root_dir": "/datasets/VFI/datasets/AnimeFantasyRPG",
+    "root_dir": DEFAULT_DATASET_ROOT,
     "records": {
         "AnimeFantasyRPG_3_60": {
             "main_indices": ["0", "1"],
@@ -44,7 +50,7 @@ MINOR_DATASET_CONFIGS = {
 
 DATASET_CONFIGS = {
     "name": "AnimeFantasyRPG_3_Full",
-    "root_dir": "/datasets/VFI/datasets/AnimeFantasyRPG",
+    "root_dir": DEFAULT_DATASET_ROOT,
     "records": {
         "AnimeFantasyRPG_3_60": {
             "main_indices": ["0", "1", "2", "3"],
@@ -58,7 +64,7 @@ DATASET_CONFIGS = {
 
 TRAIN_DATASET_CONFIGS = {
     "name": "AnimeFantasyRPG_3_Full",
-    "root_dir": "/datasets/VFI/datasets/AnimeFantasyRPG",
+    "root_dir": DEFAULT_DATASET_ROOT,
     "records": {
         "AnimeFantasyRPG_3_60": {
             "main_indices": ["0", "1", "2"],
@@ -79,7 +85,7 @@ TRAIN_DATASET_CONFIGS = {
 
 VFX_DATASET_CONFIGS = {
     "name": "AnimeFantasyRPG_3_VFX",
-    "root_dir": "/datasets/VFI/datasets/AnimeFantasyRPG",
+    "root_dir": DEFAULT_DATASET_ROOT,
     "records": {
         "AnimeFantasyRPG_3_60": {
             "main_indices": ["0", "1", "2", "3"],
@@ -93,7 +99,7 @@ VFX_DATASET_CONFIGS = {
 
 STAIR_DATASET_CONFIG = {
     "name": "AnimeFantasyRPG_2_STAIR",
-    "root_dir": "/datasets/VFI/datasets/AnimeFantasyRPG",
+    "root_dir": DEFAULT_DATASET_ROOT,
     "records": {
         "AnimeFantasyRPG_2_60": {
             "main_indices": ["4"],
@@ -107,7 +113,7 @@ STAIR_DATASET_CONFIG = {
 
 TEST_DATASET_CONFIGS = {
     "name": "AnimeFantasyRPG_2_STAIR",
-    "root_dir": "/datasets/VFI/datasets/AnimeFantasyRPG",
+    "root_dir": DEFAULT_DATASET_ROOT,
     "records": {
         "AnimeFantasyRPG_3_60": {
             "main_indices": ["3"],
@@ -121,7 +127,7 @@ TEST_DATASET_CONFIGS = {
 
 TEST_VFX_DATASET_CONFIGS = {
     "name": "AnimeFantasyRPG_2_STAIR",
-    "root_dir": "/datasets/VFI/datasets/AnimeFantasyRPG",
+    "root_dir": DEFAULT_DATASET_ROOT,
     "records": {
         "AnimeFantasyRPG_3_60": {
             "main_indices": ["3", "3"],
@@ -142,7 +148,7 @@ TEST_VFX_DATASET_CONFIGS = {
 
 TRAIN_VFX_0326_DATASET_CONFIGS = {
     "name": "AnimeFantasyRPG_2_STAIR",
-    "root_dir": "/datasets/VFI/datasets/VFI_0326/",
+    "root_dir": get_config("vfi_0326_root", "/datasets/VFI/datasets/VFI_0326/"),
     "records": {
         "ARPG_3": {
             "main_indices": ["0", "0", "0", "0", "1", "1", "1", "1", "2", "2", "2", "2"],
@@ -163,7 +169,7 @@ TRAIN_VFX_0326_DATASET_CONFIGS = {
 
 TEST_VFX_0326_DATASET_CONFIGS = {
     "name": "AnimeFantasyRPG_2_STAIR",
-    "root_dir": "/workspace/datasets/",
+    "root_dir": DEFAULT_WORKSPACE_ROOT,
     "records": {
         "ARPG_3": {
             "main_indices": ["3", "3", "3", "3"],
@@ -177,7 +183,7 @@ TEST_VFX_0326_DATASET_CONFIGS = {
 
 TEST_UNSEEN_VFX_0326_DATASET_CONFIGS = {
     "name": "AnimeFantasyRPG_2_STAIR",
-    "root_dir": "/workspace/datasets/",
+    "root_dir": DEFAULT_WORKSPACE_ROOT,
     "records": {
         "ARPG_3": {
             "main_indices": ["0", "0", "1", "1", "2", "2", "3", "3"],
@@ -198,7 +204,7 @@ TEST_UNSEEN_VFX_0326_DATASET_CONFIGS = {
 
 TEST_3D_VFX_DATASET_CONFIGS = {
     "name": "AnimeFantasyRPG_3D_VFX",
-    "root_dir": "/workspace/datasets/",
+    "root_dir": DEFAULT_WORKSPACE_ROOT,
     # "root_dir": "/datasets/VFI/datasets/VFI_0326/",
     "records": {
         "ARPG_5": {
@@ -227,7 +233,7 @@ TEST_3D_VFX_DATASET_CONFIGS = {
 
 TRAIN_VFX_0416_DATASET_CONFIGS = {
     "name": "ARPG_2nd_Patch",
-    "root_dir": "/workspace/datasets/",
+    "root_dir": DEFAULT_WORKSPACE_ROOT,
     # "root_dir": "/datasets/VFI/datasets/VFI_0326/",
     "records": {
         "ARPG_3": {
@@ -271,7 +277,7 @@ TRAIN_VFX_0416_DATASET_CONFIGS = {
 TEST_VFX_0416_DATASET_CONFIGS = {
     "name": "AnimeFantasyRPG_2_STAIR",
     # "root_dir": "/workspace/datasets/",
-    "root_dir": "/datasets/VFI/datasets/VFI_0326/",
+    "root_dir": get_config("vfi_0326_root", "/datasets/VFI/datasets/VFI_0326/"),
     "records": {
         "ARPG_3": {
             "main_indices": ["0", "0", "1", "1", "2", "2", "3", "3"],

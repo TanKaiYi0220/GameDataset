@@ -4,3 +4,4 @@ demo/
 output/
 analysis_results/
 videos/
+config/user_config.json

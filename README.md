@@ -22,6 +22,20 @@ python3 inference_rife.py --exp=1 --model ./models/RIFE/train_log
 python src_analysis/analysis_0929.py
 ```
 
+## Docker / Multi-user configuration
+1. Copy `config/user_config.example.json` to `config/user_config.json`.
+2. Edit `dataset_root`, `output_root`, and other paths to match your local or container environment.
+3. Build the Docker image:
+```bash
+docker build -t gfi:docker-version .
+```
+4. Run from repo root with mounted data and GPU support:
+```bash
+docker run --rm --gpus all -v /path/to/datasets:/workspace/datasets -v "%cd%":/app gfi:docker-version python train_ifrnet.py
+```
+
+If you need to use a custom local config file, create `config/user_config.json` and do not commit it.
+
 ## Additional Packages
 ``` bash
 pip install pandas

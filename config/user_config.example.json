@@ -1,0 +1,9 @@
+{
+  "dataset_root": "/workspace/datasets",
+  "vfi_dataset_root": "/datasets/VFI/datasets",
+  "workspace_datasets_root": "/workspace/datasets",
+  "model_root": "./models",
+  "output_root": "./output",
+  "data_root": "./datasets/data",
+  "log_root": "./logs"
+}

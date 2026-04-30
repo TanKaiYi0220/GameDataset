@@ -6,11 +6,10 @@ import torch
 
 from config.config import get_config
 from datasets.dataset_config import TRAIN_VFX_0416_DATASET_CONFIGS
-from evaluation import TaskEvaluator, VFI_METRICS
 from inference_ifrnet_common import load_model, run_inference_loop
-from src.gameData_loader import load_backward_velocity, load_forward_velocity
+from models.IFRNet.utils import warp
 from src.utils import flow_to_image
-from utils import warp, save_img
+from src.utils import save_img
 
 ROOT_DIR = get_config("data_root", "./datasets/data")
 MODEL_PATH = os.path.join(get_config("output_root", "./output"), "IFRNet_VFX_0326", "checkpoints")

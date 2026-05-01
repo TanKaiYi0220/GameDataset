@@ -36,6 +36,19 @@ docker run --rm --gpus all -v /path/to/datasets:/workspace/datasets -v "%cd%":/a
 
 If you need to use a custom local config file, create `config/user_config.json` and do not commit it.
 
+## Resume Output Directory Automation
+When you do not pass `--output_dir`, training now creates a fresh output directory automatically.
+
+- Fresh training: uses the model default output directory name and appends a numeric suffix if needed.
+- Resume training: if `--resume_path` points to an existing checkpoint, the new output directory is created automatically as a sibling of the source run, so the original run is preserved.
+
+Example:
+```bash
+python train_ifrnet.py --resume_path ./output/IFRNet_FineTuning_Resume_0416/checkpoints/best.pth
+```
+
+This will resume from the checkpoint but write new checkpoints, logs, and CSV outputs into a new directory derived from the source run. You only need to pass `--output_dir` when you want a specific custom path.
+
 ## Additional Packages
 ``` bash
 pip install pandas

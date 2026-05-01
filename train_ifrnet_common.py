@@ -5,6 +5,7 @@ import os
 import random
 import time
 from dataclasses import dataclass
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
@@ -139,6 +140,101 @@ def build_loss_record(
         "loss_dis": float(loss_dis.detach().cpu()),
         "loss_total": float(total_loss.detach().cpu()),
     }
+
+
+def resolve_path(path_value: str) -> Path:
+    return Path(path_value).expanduser().resolve()
+
+
+def read_resume_start_epoch(checkpoint_path: Path) -> int | None:
+    if not checkpoint_path.is_file():
+        return None
+
+    checkpoint = torch.load(str(checkpoint_path), map_location="cpu")
+    epoch = checkpoint.get("epoch")
+    if epoch is None:
+        return None
+    return int(epoch) + 1
+
+
+def build_unique_output_dir(base_dir: Path) -> str:
+    if not base_dir.exists():
+        return str(base_dir)
+
+    suffix_index = 1
+    while True:
+        candidate = base_dir.parent / f"{base_dir.name}_{suffix_index:02d}"
+        if not candidate.exists():
+            return str(candidate)
+        suffix_index += 1
+
+
+def build_resume_output_dir(resume_path: str, start_epoch: int | None) -> str:
+    checkpoint_path = resolve_path(resume_path)
+    if checkpoint_path.parent.name != "checkpoints":
+        raise ValueError(
+            f"resume_path must point inside a checkpoints directory, got {checkpoint_path}"
+        )
+
+    source_output_dir = checkpoint_path.parent.parent
+    checkpoint_name = checkpoint_path.stem
+    resume_epoch_label = f"e{start_epoch}" if start_epoch is not None else "resume"
+    base_dir = source_output_dir.parent / f"{source_output_dir.name}_{checkpoint_name}_{resume_epoch_label}"
+    return build_unique_output_dir(base_dir)
+
+
+def resolve_resume_path(user_resume_path: str | None, default_resume_path: str | None) -> str | None:
+    if user_resume_path is not None:
+        resume_path = resolve_path(user_resume_path)
+        if not resume_path.is_file():
+            raise FileNotFoundError(f"Resume checkpoint not found: {resume_path}")
+        return str(resume_path)
+
+    if default_resume_path is None:
+        return None
+
+    resume_path = resolve_path(default_resume_path)
+    if resume_path.is_file():
+        return str(resume_path)
+    return None
+
+
+def resolve_output_dir(
+    output_dir: str | None,
+    resume_path: str | None,
+    default_output_dir: str,
+) -> tuple[str, str]:
+    if output_dir is not None:
+        return str(resolve_path(output_dir)), "user"
+
+    if resume_path is not None:
+        start_epoch = read_resume_start_epoch(resolve_path(resume_path))
+        return build_resume_output_dir(resume_path, start_epoch), "auto_resume"
+
+    return build_unique_output_dir(resolve_path(default_output_dir)), "auto_fresh"
+
+
+def require_positive(name: str, value: int) -> None:
+    if value <= 0:
+        raise ValueError(f"{name} must be positive, got {value}")
+
+
+def save_checkpoint(
+    checkpoint_path: str,
+    model: torch.nn.Module,
+    optimizer: optim.Optimizer,
+    epoch: int,
+    best_psnr: float,
+) -> None:
+    torch.save(
+        {
+            "model": model.state_dict(),
+            "optimizer": optimizer.state_dict(),
+            "epoch": epoch,
+            "best_psnr": best_psnr,
+        },
+        checkpoint_path,
+    )
 
 
 @torch.no_grad()
@@ -288,24 +384,20 @@ def train(
 
             if test_psnr > best_psnr:
                 best_psnr = test_psnr
-                torch.save(
-                    {
-                        "model": model.state_dict(),
-                        "optimizer": optimizer.state_dict(),
-                        "epoch": epoch,
-                        "best_psnr": best_psnr,
-                    },
+                save_checkpoint(
                     os.path.join(args.output_dir, "checkpoints", "best.pth"),
+                    model,
+                    optimizer,
+                    epoch,
+                    best_psnr,
                 )
 
-        torch.save(
-            {
-                "model": model.state_dict(),
-                "optimizer": optimizer.state_dict(),
-                "epoch": epoch,
-                "best_psnr": best_psnr,
-            },
+        save_checkpoint(
             os.path.join(args.output_dir, "checkpoints", "latest.pth"),
+            model,
+            optimizer,
+            epoch,
+            best_psnr,
         )
 
 
@@ -319,9 +411,9 @@ def parse_train_args(argv: list[str] | None = None) -> argparse.Namespace:
         type=str,
         help="Root directory containing frame and velocity assets.",
     )
-    parser.add_argument("--resume_epoch", default=None, type=int, help="Expected next epoch when resuming from a checkpoint.")
+    parser.add_argument("--resume_epoch", default=None, type=int, help="Optional sanity check for the next epoch when resuming.")
     parser.add_argument("--epochs", default=60, type=int, help="Total number of epochs to run.")
-    parser.add_argument("--resume_path", default=None, type=str, help="Checkpoint to resume from.")
+    parser.add_argument("--resume_path", default=None, type=str, help="Checkpoint to resume from. Leave empty to use the model default if it exists.")
     parser.add_argument("--eval_interval", default=1, type=int, help="Run validation every N epochs.")
     parser.add_argument("--lr_start", default=1e-4, type=float, help="Initial learning rate.")
     parser.add_argument("--lr_end", default=1e-5, type=float, help="Final learning rate after cosine decay.")
@@ -333,30 +425,22 @@ def parse_train_args(argv: list[str] | None = None) -> argparse.Namespace:
 
 def prepare_args(args: argparse.Namespace) -> argparse.Namespace:
     model_config = get_model_config(args.model_name)
-
-    args.output_dir_source = "user" if args.output_dir is not None else "default"
-    args.resume_path_source = "user" if args.resume_path is not None else "default"
-    args.resume_epoch_source = "user" if args.resume_epoch is not None else "default"
-
-    if args.output_dir is None:
-        args.output_dir = model_config["default_output_dir"]
-    if args.resume_path is None:
-        args.resume_path = model_config["default_resume_path"]
-    if args.resume_epoch is None:
-        args.resume_epoch = model_config["default_resume_epoch"]
+    args.resume_path = resolve_resume_path(args.resume_path, model_config["default_resume_path"])
+    args.output_dir, args.output_dir_reason = resolve_output_dir(
+        args.output_dir,
+        args.resume_path,
+        model_config["default_output_dir"],
+    )
 
     return args
 
 
 def validate_args(args: argparse.Namespace) -> None:
-    if args.epochs <= 0:
-        raise ValueError(f"epochs must be positive, got {args.epochs}")
-    if args.eval_interval <= 0:
-        raise ValueError(f"eval_interval must be positive, got {args.eval_interval}")
-    if args.batch_size <= 0:
-        raise ValueError(f"batch_size must be positive, got {args.batch_size}")
+    require_positive("epochs", args.epochs)
+    require_positive("eval_interval", args.eval_interval)
+    require_positive("batch_size", args.batch_size)
     if args.lr_start <= 0 or args.lr_end < 0:
-        raise ValueError(f"invalid learning rates: lr_start={args.lr_start}, lr_end={args.lr_end}")
+        raise ValueError(f"Learning rates must satisfy lr_start > 0 and lr_end >= 0, got {args.lr_start}, {args.lr_end}")
     if args.lr_end > args.lr_start:
         raise ValueError(f"lr_end must be <= lr_start, got lr_start={args.lr_start}, lr_end={args.lr_end}")
 
@@ -368,39 +452,28 @@ def load_training_state(
     device: torch.device,
     logger: logging.Logger,
 ) -> TrainingState:
-    checkpoint_path = args.resume_path
-    if checkpoint_path is not None and os.path.isfile(checkpoint_path):
-        checkpoint = torch.load(checkpoint_path, map_location=device)
-        if "model" not in checkpoint or "optimizer" not in checkpoint or "epoch" not in checkpoint:
-            raise KeyError(f"Resume checkpoint is missing required keys: {checkpoint_path}")
-
+    if args.resume_path is not None:
+        checkpoint = torch.load(args.resume_path, map_location=device)
         model.load_state_dict(checkpoint["model"])
         optimizer.load_state_dict(checkpoint["optimizer"])
 
         start_epoch = int(checkpoint["epoch"]) + 1
-        if args.resume_epoch_source == "user" and args.resume_epoch != start_epoch:
-            raise ValueError(
-                f"resume_epoch={args.resume_epoch} does not match checkpoint next epoch={start_epoch} for {checkpoint_path}"
-            )
+        if args.resume_epoch is not None and args.resume_epoch != start_epoch:
+            raise ValueError(f"resume_epoch={args.resume_epoch} does not match checkpoint next epoch={start_epoch}")
 
-        logger.info("Resumed from %s at epoch %s", checkpoint_path, start_epoch)
+        logger.info("Resumed from %s at epoch %s", args.resume_path, start_epoch)
         return TrainingState(
             start_epoch=start_epoch,
             global_step=start_epoch * args.iters_per_epoch,
             best_psnr=float(checkpoint.get("best_psnr", 0.0)),
-            resume_path=checkpoint_path,
+            resume_path=args.resume_path,
             mode="resume",
         )
 
-    if checkpoint_path is not None and args.resume_path_source == "user":
-        raise FileNotFoundError(f"Resume checkpoint not found: {checkpoint_path}")
-
-    if args.resume_epoch_source == "user" and args.resume_epoch != 0:
-        raise ValueError("resume_epoch can only be set when a valid resume_path exists")
-
-    if args.model_name == "IFRNet":
-        pretrained_path = get_model_config(args.model_name)["pretrained_checkpoint"]
-        if pretrained_path is None or not os.path.isfile(pretrained_path):
+    pretrained_path = get_model_config(args.model_name)["pretrained_checkpoint"]
+    if pretrained_path is not None:
+        pretrained_path = str(resolve_path(pretrained_path))
+        if not os.path.isfile(pretrained_path):
             raise FileNotFoundError(f"Pretrained checkpoint not found: {pretrained_path}")
 
         logger.info("Loading pretrained checkpoint from %s", pretrained_path)
@@ -413,7 +486,7 @@ def load_training_state(
             mode="pretrained",
         )
 
-    logger.info("Training IFRNet_Residual from scratch")
+    logger.info("Training %s from scratch", args.model_name)
     return TrainingState(
         start_epoch=0,
         global_step=0,
@@ -432,11 +505,12 @@ def log_run_summary(
     device: torch.device,
 ) -> None:
     logger.info(
-        "Starting run with model=%s mode=%s device=%s output_dir=%s train_samples=%s test_samples=%s start_epoch=%s epochs=%s batch_size=%s",
+        "Starting run with model=%s mode=%s device=%s output_dir=%s output_dir_reason=%s train_samples=%s test_samples=%s start_epoch=%s epochs=%s batch_size=%s",
         args.model_name,
         training_state.mode,
         device,
         args.output_dir,
+        args.output_dir_reason,
         len(train_dataset),
         len(test_dataset),
         training_state.start_epoch,

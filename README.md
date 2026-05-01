@@ -49,6 +49,15 @@ python train_ifrnet.py --resume_path ./output/IFRNet_FineTuning_Resume_0416/chec
 
 This will resume from the checkpoint but write new checkpoints, logs, and CSV outputs into a new directory derived from the source run. You only need to pass `--output_dir` when you want a specific custom path.
 
+## VFI Triplet Selection
+During dataset preprocessing, the generated `*_raw_sequence_frame_index.csv` now keeps only even-start triplets for VFI:
+
+- `(0, 1, 2)`
+- `(2, 3, 4)`
+- `(4, 5, 6)`
+
+Odd-start triplets such as `(1, 2, 3)` are skipped before the dataloader stage, so the training samples stay aligned with the intended `fps_30` motion pairs.
+
 ## Additional Packages
 ``` bash
 pip install pandas

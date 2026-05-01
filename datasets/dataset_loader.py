@@ -10,6 +10,7 @@ import cv2
 from .dataset_config import MINOR_DATASET_CONFIGS, iter_dataset_configs
 from .utils import load_backward_velocity
 
+
 def random_resize(img0, imgt, img1, bmv, fmv, p=0.1):
     if random.uniform(0, 1) < p:
         img0 = cv2.resize(img0, dsize=None, fx=2.0, fy=2.0, interpolation=cv2.INTER_LINEAR)
@@ -219,20 +220,26 @@ class FlowEstimationDataset(BaseDataset):
         return item
 
 class VFIDataset(BaseDataset):
-    def __getitem__(self, idx):
-        if self.df_fps == self.input_fps: # 60 -> 120
-            row = self.df.iloc[idx]
-            frame_0_idx = row["img0"]
-            frame_1_idx = "None"
-            frame_2_idx = row["img1"]
-        else: # 30 -> 60
-            row = self.df.iloc[idx * 2]
-            frame_0_idx = row["img0"]
-            frame_1_idx = row["img1"]
-            frame_2_idx = row["img2"]
+    def __init__(
+        self,
+        df: pd.DataFrame,
+        root_dir: str,
+        input_fps: int,
+        modality_config = DEFAULT_MODALITY_CONFIG,
+        transform=None,
+    ):
+        super().__init__(df=df, root_dir=root_dir, input_fps=input_fps, modality_config=modality_config, transform=transform)
 
-        record = self.df.iloc[idx]["record"]
-        mode = self.df.iloc[idx]["mode"]
+    def __len__(self):
+        return len(self.df)
+
+    def __getitem__(self, idx):
+        row = self.df.iloc[idx]
+        frame_0_idx = row["img0"]
+        frame_1_idx = row["img1"]
+        frame_2_idx = row["img2"]
+        record = row["record"]
+        mode = row["mode"]
 
         item = {
             "frame_range": f"frame_{frame_0_idx:04d}_{frame_2_idx:04d}",
@@ -270,23 +277,17 @@ class VFITrainDataset(BaseDataset):
         self.augment = augment
         if self.input_fps != 30:
             raise ValueError("VFITrainDataset only supports input_fps=30 for now")
-        
-        
+
+    def __len__(self):
+        return len(self.df)
 
     def __getitem__(self, idx):
-        if self.df_fps == self.input_fps: # 60 -> 120
-            row = self.df.iloc[idx]
-            frame_0_idx = row["img0"]
-            frame_1_idx = "None"
-            frame_2_idx = row["img1"]
-        else: # 30 -> 60
-            row = self.df.iloc[idx * 2]
-            frame_0_idx = row["img0"]
-            frame_1_idx = row["img1"]
-            frame_2_idx = row["img2"]
-
-        record = self.df.iloc[idx]["record"]
-        mode = self.df.iloc[idx]["mode"]
+        row = self.df.iloc[idx]
+        frame_0_idx = row["img0"]
+        frame_1_idx = row["img1"]
+        frame_2_idx = row["img2"]
+        record = row["record"]
+        mode = row["mode"]
 
         info = {
             "frame_range": f"frame_{frame_0_idx:04d}_{frame_2_idx:04d}",

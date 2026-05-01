@@ -249,54 +249,23 @@ if __name__ == "__main__":
             df_60 = pd.read_csv(f"./data/{cfg.record_name}_preprocessed/{cfg.mode_index}_merged_frame_index.csv", dtype={"reason_easy": "string", "reason_medium": "string"})
 
             # Generate full sequence with valid flag
-            raw_seq_df = pd.DataFrame()
+            rows = []
 
-            for frame_idx in range(0, cfg.max_index - 1, 1):
-                valid_flag = True
-                if frame_idx % 2 == 0: # even
-                    #       HERE
-                    # 1 ---- 2 ---- 3 ---- 4
-                    # True   False  True   True
-                    # 2 ---- 2 ---- 3 ---- 4 ==> Still Valid
-                    # True   True   False  True
-                    # 1 ---- 2 ---- 2 ---- 4 ==> Invalid
-                    # True   True   True   False
-                    # 1 ---- 2 ---- 4 ---- 4 ==> Invalid
-                    # Thus, only need to check about [frame_idx + 1] and [frame_idx + 2] 
-                    fps_30_img_2_flag = df_30.at[frame_idx // 2 + 1, "global_is_valid"]
+            for frame_idx in range(0, cfg.max_index - 1, 2):
+                fps_30_img_2_flag = df_30.at[frame_idx // 2 + 1, "global_is_valid"]
+                fps_60_img_1_flag = df_60.at[frame_idx + 1, "global_is_valid"]
+                fps_60_img_2_flag = df_60.at[frame_idx + 2, "global_is_valid"]
 
-                    fps_60_img_1_flag = df_60.at[frame_idx + 1, "global_is_valid"]
-                    fps_60_img_2_flag = df_60.at[frame_idx + 2, "global_is_valid"]
-
-                    valid_flag = fps_30_img_2_flag and fps_60_img_1_flag and fps_60_img_2_flag
-                else: # odds
-                    #       HERE
-                    # 0 ---- 1 ---- 2 ---- 3
-                    # True   False  True   True
-                    # 0 ---- 0 ---- 2 ---- 3 ==> Invalid
-                    # True   True   False  True
-                    # 0 ---- 2 ---- 2 ---- 3 ==> Invalid
-                    # True   True   True   False
-                    # 0 ---- 1 ---- 2 ---- 2 ==> Invalid
-                    # Thus, only need to check about [frame_idx + 1] and [frame_idx + 2] 
-                    fps_30_img_2_flag = df_30.at[frame_idx // 2 + 1, "global_is_valid"]
-
-                    fps_60_img_0_flag = df_60.at[frame_idx, "global_is_valid"]
-                    fps_60_img_1_flag = df_60.at[frame_idx + 1, "global_is_valid"]
-                    fps_60_img_2_flag = df_60.at[frame_idx + 2, "global_is_valid"]
-
-                    valid_flag = fps_30_img_2_flag and fps_60_img_0_flag and fps_60_img_1_flag and fps_60_img_2_flag
-
-                row = pd.DataFrame({
-                    "record": [cfg.record],
-                    "fps": [cfg.fps],
-                    "img0": [frame_idx],
-                    "img1": [frame_idx + 1],
-                    "img2": [frame_idx + 2],
-                    "valid": [valid_flag]
+                rows.append({
+                    "record": cfg.record,
+                    "fps": cfg.fps,
+                    "img0": frame_idx,
+                    "img1": frame_idx + 1,
+                    "img2": frame_idx + 2,
+                    "valid": bool(fps_30_img_2_flag and fps_60_img_1_flag and fps_60_img_2_flag),
                 })
 
-                raw_seq_df = pd.concat([raw_seq_df, row], ignore_index=True)
+            raw_seq_df = pd.DataFrame(rows)
 
             raw_seq_df.to_csv(f"./data/{cfg.record_name}_preprocessed/{cfg.mode_index}_raw_sequence_frame_index.csv", index=False)
             print(f"./data/{cfg.record_name}_preprocessed/{cfg.mode_index}_raw_sequence_frame_index.csv")
@@ -314,9 +283,12 @@ if __name__ == "__main__":
             raw_seq_df["D_index Median"] = [-1] * len(raw_seq_df)
             
             invalid_count = 0
-            with tqdm(range(0, len(raw_seq_df), 2)) as pbar:
-                for frame_idx in pbar:
-                    img_2_idx = frame_idx + 2
+            with tqdm(range(len(raw_seq_df))) as pbar:
+                for row_index in pbar:
+                    row = raw_seq_df.iloc[row_index]
+                    img_0_idx = int(row["img0"])
+                    img_1_idx = int(row["img1"])
+                    img_2_idx = int(row["img2"])
 
                     # fps 30
                     fps_30_mode_path = cfg.mode_path.replace("fps_60", "fps_30")
@@ -325,7 +297,7 @@ if __name__ == "__main__":
 
                     # fps 60
                     fps_60_dir = os.path.join(ROOT_DIR, cfg.record_name, cfg.mode_path)
-                    backwardVel_fps60_1_0_path = f"{fps_60_dir}/backwardVel_Depth_{frame_idx + 1}.exr"
+                    backwardVel_fps60_1_0_path = f"{fps_60_dir}/backwardVel_Depth_{img_1_idx}.exr"
 
                     backwardVel_2_0, _ = load_backward_velocity(backwardVel_fps30_2_0_path)
                     backwardVel_1_0, _ = load_backward_velocity(backwardVel_fps60_1_0_path)
@@ -334,15 +306,15 @@ if __name__ == "__main__":
                     dis_index_mean = np.mean(dis_index)
                     dis_index_median = np.median(dis_index)
 
-                    raw_seq_df.at[frame_idx, "D_index Mean"] = dis_index_mean
-                    raw_seq_df.at[frame_idx, "D_index Median"] = dis_index_median
+                    raw_seq_df.at[row_index, "D_index Mean"] = dis_index_mean
+                    raw_seq_df.at[row_index, "D_index Median"] = dis_index_median
 
                     def check_valid(value): # remove floating precision issue
                         value = round(value, 2)
                         return value < 0.0 or value > 1.0
 
                     if check_valid(dis_index_mean) or check_valid(dis_index_median):
-                        print(frame_idx, dis_index_mean, dis_index_median)
+                        print(img_0_idx, dis_index_mean, dis_index_median)
                         invalid_count += 1
                         dis_index_mean = 0.0 if dis_index_mean < 0 else 1.0
                         dis_index_median = 0.0 if dis_index_median < 0 else 1.0

@@ -1,25 +1,27 @@
 # GameDataset
 ## Commands
 ``` bash
-python main.py --input_folder "./datasets/Fantasy_RPG/FRPG_0_0_0/fps_60/" --output_folder "./datasets/Fantasy_RPG/FRPG_0_0_0/fps_60_png/" --file_type "colorNoScreenUI"
-```
-
-
-``` bash
-python demo_searaft.py --cfg "./models/SEARAFT/config/eval/spring-M.json" --model "./models/SEARAFT/models/Tartan-C-T-TSKH-spring540x960-M.pth"
+python -m gamedataset.training.ifrnet
 ```
 
 ``` bash
-python inference_searaft.py --cfg "./models/SEARAFT/config/eval/spring-M.json" --model "./models/SEARAFT/models/Tartan-C-T-TSKH-spring540x960-M.pth"
-```
-
-
-``` bash
-python3 inference_rife.py --exp=1 --model ./models/RIFE/train_log
+python -m gamedataset.training.ifrnet_residual
 ```
 
 ``` bash
-python src_analysis/analysis_0929.py
+python -m gamedataset.inference.ifrnet
+```
+
+``` bash
+python -m gamedataset.inference.ifrnet_residual
+```
+
+``` bash
+python -m gamedataset.inference.results_to_video --help
+```
+
+``` bash
+python -m gamedataset.analysis.y2025.analysis_0929
 ```
 
 ## Docker / Multi-user configuration
@@ -31,7 +33,7 @@ docker build -t gfi:docker-version .
 ```
 4. Run from repo root with mounted data and GPU support:
 ```bash
-docker run --rm --gpus all -v /path/to/datasets:/workspace/datasets -v "%cd%":/app gfi:docker-version python train_ifrnet.py
+docker run --rm --gpus all -v /path/to/datasets:/workspace/datasets -v "%cd%":/app gfi:docker-version python -m gamedataset.training.ifrnet
 ```
 
 If you need to use a custom local config file, create `config/user_config.json` and do not commit it.
@@ -44,7 +46,7 @@ When you do not pass `--output_dir`, training now creates a fresh output directo
 
 Example:
 ```bash
-python train_ifrnet.py --resume_path ./output/IFRNet_FineTuning_Resume_0416/checkpoints/best.pth
+python -m gamedataset.training.ifrnet --resume_path ./output/IFRNet_FineTuning_Resume_0416/checkpoints/best.pth
 ```
 
 This will resume from the checkpoint but write new checkpoints, logs, and CSV outputs into a new directory derived from the source run. You only need to pass `--output_dir` when you want a specific custom path.

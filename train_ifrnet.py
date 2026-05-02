@@ -1,7 +1,0 @@
-﻿import sys
-from train_ifrnet_common import main
-
-if __name__ == "__main__":
-    if "--model-name" not in sys.argv:
-        sys.argv.extend(["--model-name", "IFRNet"])
-    main()
